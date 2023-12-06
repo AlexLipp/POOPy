@@ -1,7 +1,13 @@
 from abc import ABC, abstractmethod
 import datetime
 import warnings
-from typing import Union, Optional, List, Dict
+import pickle
+from typing import Union, Optional, List, Dict, Tuple
+import numpy as np
+from landlab import RasterModelGrid
+from landlab.components.flow_accum.flow_accum_bw import find_drainage_area_and_discharge
+from poopy.aux import geographic_coords_to_model_xy, model_xy_to_geographic_coords
+
 
 class Monitor:
     """A class to represent a CSO monitor.
@@ -281,12 +287,14 @@ class WaterCompany(ABC):
         clientSecret: The client secret for the Water Company API.
         active_monitors: A dictionary of active monitors accessed by site name.
         active_monitor_names: A list of the names of active monitors.
+        model_grid_file_path: The file path to the model grid that the monitors are located on for routing flow.
+        model_grid: The model grid that the monitors are located on for routing flow.
 
     Methods:
         update: Updates the active_monitors list and the timestamp.
     """
 
-    def __init__(self, name: str, clientID: str, clientSecret: str):
+    def __init__(self, clientID: str, clientSecret: str):
         """
         Initialize attributes to describe a Water Company network.
 
@@ -295,11 +303,13 @@ class WaterCompany(ABC):
             clientID: The client ID for the Water Company API.
             clientSecret: The client secret for the Water Company API.
         """
-        self._name = name
+        self._name : str = None
         self._clientID = clientID
         self._clientSecret = clientSecret
         self._active_monitors: Dict[str, Monitor] = self._fetch_active_monitors()
         self._timestamp: datetime.datetime = datetime.datetime.now()
+        self._model_grid_file_path: str = None
+        self._model_grid: RasterModelGrid = None
 
     @abstractmethod
     def _fetch_active_monitors(self) -> Dict[str, Monitor]:
@@ -351,6 +361,16 @@ class WaterCompany(ABC):
             if monitor.current_status == "Discharging"
         ]
 
+    @property
+    def model_grid(self) -> RasterModelGrid:
+        """Return the model grid that the monitors are located on for routing flow."""
+        if self._model_grid is None:
+            print("Loading model grid from memory...")
+            print("...can take a bit of time...")
+            with open(self._model_grid_file_path, "rb") as handle:
+                self._model_grid = pickle.load(handle)
+        return self._model_grid
+
     # define an update function that updates the active_monitors list and the timestamp
     def update(self):
         """
@@ -358,3 +378,52 @@ class WaterCompany(ABC):
         """
         self._active_monitors = self._fetch_active_monitors()
         self._timestamp = datetime.datetime.now()
+
+
+    def calculate_downstream_points(self) -> Tuple[float, float, float]:
+        """
+        Calculate the downstream points for all active discharges.
+
+        Returns:
+            A tuple of the downstream X coordinates, downstream Y coordinates, and the number of 
+            upstream discharges at each downstream point. 
+        """
+
+        # Extract all the xy coordinates of active discharges
+        grid = self.model_grid
+        # Coords of all active discharges in OSGB
+        discharge_locs = [
+            (discharge.x_coord, discharge.y_coord) for discharge in self.discharging_monitors
+        ]
+        # Convert to model grid coordinates
+        locs_model = [geographic_coords_to_model_xy(loc, grid) for loc in discharge_locs]
+
+        # Get the model grid node ID for each discharge
+        nodes = [
+            np.ravel_multi_index((y.astype(int), x.astype(int)), grid.shape)
+            for x, y in locs_model
+        ]
+
+        # Set up the source array for propagating discharges downstream
+        source_array = np.zeros(grid.shape).flatten()
+        source_array[nodes] = 1
+
+        # Propagate the discharges downstream
+        _, number_upstream_sources = find_drainage_area_and_discharge(
+            grid.at_node["flow__upstream_node_order"],
+            r=grid.at_node["flow__receiver_node"],
+            runoff=source_array,
+        )
+
+        # Find the downstream nodes of the discharges
+        dstr_polluted_nodes = np.where(number_upstream_sources != 0)[0]
+        # Number of upstream nodes at sites
+        n_upstream = number_upstream_sources[dstr_polluted_nodes]
+        dstr_polluted_gridy, dstr_polluted_gridx = np.unravel_index(
+            dstr_polluted_nodes, grid.shape
+        )
+        downstream_x, downstream_y = model_xy_to_geographic_coords(
+            (dstr_polluted_gridx, dstr_polluted_gridy), grid
+        )
+
+        return downstream_x, downstream_y, n_upstream

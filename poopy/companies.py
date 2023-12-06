@@ -11,7 +11,9 @@ class ThamesWater(WaterCompany):
     """
 
     def __init__(self, clientID: str, clientSecret: str):
-        super().__init__("Thames Water", clientID, clientSecret)
+        super().__init__(clientID, clientSecret)
+        self._name = "Thames Water"
+        self._model_grid_file_path = "../sewage/input_dir/mg_elev.obj"
 
     def _fetch_active_monitors(self) -> Dict[str, Monitor]:
         """
