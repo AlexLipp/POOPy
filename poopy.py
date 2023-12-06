@@ -1,12 +1,25 @@
 from abc import ABC, abstractmethod
 import datetime
-from typing import Union, Optional
+from typing import Union, Optional, List
 
 
-class Event(ABC):
-    """A class to represent an event at a CSO monitor."""
+class Monitor:
+    """A class to represent a CSO monitor.
+    
+    Attributes:
+        site_name: The name of the site.
+        permit_number: The permit number of the monitor.
+        x_coord: The X coordinate of the site.
+        y_coord: The Y coordinate of the site.
+        receiving_watercourse: The receiving watercourse of the site.
+        current_status: The current status of the monitor.
+        current_event: The current event at the monitor.
+        history: The history of events at the monitor.
+    
+    Methods:
+        print_status: Print the current status of the monitor.
+    """
 
-    @abstractmethod
     def __init__(
         self,
         site_name: str,
@@ -14,52 +27,26 @@ class Event(ABC):
         x_coord: float,
         y_coord: float,
         receiving_watercourse: str,
-        ongoing: bool,
-        start_time: datetime.datetime,
-        end_time: Optional[datetime.datetime] = None,
-        event_type: Optional[str] = "Unknown",
     ) -> None:
+        # Add docstring for init in Google style
         """
-        Initialize attributes to describe an event.
+        Initialize attributes to describe a CSO monitor.
 
         Args:
             site_name: The name of the site.
-            permit_number: The permit number of the site.
-            x_coord: The OSGB X coordinate of the site.
-            y_coord: The OSGB Y coordinate of the site.
-            receiving_watercourse: The watercourse receiving any discharge.
-            ongoing: Whether the event is ongoing.
-            start_time: The start time of the event.
-            end_time: The end time of the event. Defaults to None.
-            event_type: The type of event. Defaults to "Unknown".
+            permit_number: The permit number of the monitor.
+            x_coord: The X coordinate of the site.
+            y_coord: The Y coordinate of the site.
+            receiving_watercourse: The receiving watercourse of the site.     
         """
-        self._site_name = site_name
-        self._permit_number = permit_number
-        self._x_coord = x_coord
-        self._y_coord = y_coord
-        self._receiving_watercourse = receiving_watercourse
-        self._start_time = start_time
-        self._ongoing = ongoing
-        self._end_time = end_time
-        self._duration = self.duration
-        self._event_type = event_type
-        self._validate()
+        self._site_name: str = site_name
+        self._permit_number: str = permit_number
+        self._x_coord: float = x_coord
+        self._y_coord: float = y_coord
+        self._receiving_watercourse: str = receiving_watercourse
+        self._history: List[Event]
+        self._current_event: Event
 
-    def _validate(self):
-        if self._ongoing and self._end_time is not None:
-            raise ValueError("End time must be None if the event is ongoing.")
-        if self._end_time is not None and self._end_time < self._start_time:
-            raise ValueError("End time must be after the start time.")
-
-    @property
-    def duration(self) -> float:
-        """Return the duration of the event in minutes."""
-        if not self.ongoing:
-            return (self._end_time - self._start_time).total_seconds() / 60
-        else:
-            return (datetime.datetime.now() - self._start_time).total_seconds() / 60
-
-    # Define getters for all attributes such that they are immutable (no setters)
     @property
     def site_name(self) -> str:
         """Return the name of the site."""
@@ -84,6 +71,95 @@ class Event(ABC):
     def receiving_watercourse(self) -> str:
         """Return the receiving watercourse of the site."""
         return self._receiving_watercourse
+
+    @property
+    def current_status(self) -> str:
+        """Return the current status of the monitor."""
+        if self._current_event is None:
+            raise ValueError("Current event is not set.")
+        else:
+            return self._current_event.event_type
+
+    @property
+    def current_event(self) -> "Event":
+        """Return the current event of the monitor."""
+        return self._current_event
+
+    @current_event.setter
+    def current_event(self, event: "Event") -> None:
+        """Set the current event of the monitor."""
+        if not event.ongoing:
+            raise ValueError("Current Event must be ongoing.")
+        else:
+            self._current_event = event
+
+    def print_status(self) -> None:
+        """Print the current status of the monitor."""
+        if self._current_event is None:
+            raise ValueError("Current event is not set.")
+        else:
+            self._current_event.summary()
+
+
+class Event(ABC):
+    """A class to represent an event at a CSO monitor.
+    
+    Attributes:
+        monitor: The monitor at which the event occurred.
+        ongoing: Whether the event is ongoing.
+        start_time: The start time of the event.
+        end_time: The end time of the event.
+        duration: The duration of the event.
+        event_type: The type of event.
+    
+    Methods:
+        summary: Print a summary of the event.
+    
+    """
+
+    @abstractmethod
+    def __init__(
+        self,
+        monitor: Monitor,
+        ongoing: bool,
+        start_time: datetime.datetime,
+        end_time: Optional[datetime.datetime] = None,
+        event_type: Optional[str] = "Unknown",
+    ) -> None:
+        """
+        Initialize attributes to describe an event.
+
+        Args:
+            monitor: The monitor at which the event occurred.
+            ongoing: Whether the event is ongoing.
+            start_time: The start time of the event.
+            end_time: The end time of the event. Defaults to None.
+            event_type: The type of event. Defaults to "Unknown".
+
+        Methods:
+            print_summary: Print a summary of the event.
+        """
+        self._monitor = monitor
+        self._start_time = start_time
+        self._ongoing = ongoing
+        self._end_time = end_time
+        self._duration = self.duration
+        self._event_type = event_type
+        self._validate()
+
+    def _validate(self):
+        if self._ongoing and self._end_time is not None:
+            raise ValueError("End time must be None if the event is ongoing.")
+        if self._end_time is not None and self._end_time < self._start_time:
+            raise ValueError("End time must be after the start time.")
+
+    @property
+    def duration(self) -> float:
+        """Return the duration of the event in minutes."""
+        if not self.ongoing:
+            return (self._end_time - self._start_time).total_seconds() / 60
+        else:
+            return (datetime.datetime.now() - self._start_time).total_seconds() / 60
 
     @property
     def ongoing(self) -> bool:
@@ -119,17 +195,17 @@ class Event(ABC):
             self._end_time = datetime.datetime.now()
             self._duration = self.duration
 
-    def summary(self) -> None:
+    def print_summary(self) -> None:
         print(
             f"""
-        --- Event Summary ---
+        --------------------------------------
         Event Type: {self.event_type}
-        Site Name: {self.site_name}
-        Permit Number: {self.permit_number}
-        OSGB Coordinates: ({self.x_coord}, {self.y_coord})
-        Receiving Watercourse: {self.receiving_watercourse}
+        Site Name: {self.monitor.site_name}
+        Permit Number: {self.monitor.permit_number}
+        OSGB Coordinates: ({self.monitor.x_coord}, {self.monitor.y_coord})
+        Receiving Watercourse: {self.monitor.receiving_watercourse}
         Start Time: {self.start_time}
-        End Time: {self.end_time if self.end_time else 'Ongoing'}
+        End Time: {self.end_time if not self.ongoing else "Ongoing"}
         Duration: {round(self.duration)} minutes
         """
         )
@@ -140,11 +216,12 @@ class Discharge(Event):
 
     def __init__(self, *args, **kwargs) -> None:
         super().__init__(*args, **kwargs)
-        self._event_type = "Discharge"
+        self._event_type = "Discharging"
 
 
 class Offline(Event):
     """A class to represent a CSO monitor being offline."""
+
     # TODO - add a "probable status" that is inferred from the last known status.
 
     def __init__(self, *args, **kwargs) -> None:
@@ -157,28 +234,4 @@ class NoDischarge(Event):
 
     def __init__(self, *args, **kwargs) -> None:
         super().__init__(*args, **kwargs)
-        self._event_type = "NoDischarge"
-
-
-class WCCurrent:
-    """A class to represent current status of all monitors managed by a water company."""
-
-    # Has an immutable string for the WaterCompany name
-    # Contains an immutable list of Discharge, Offline and NoDischarge events
-    # An immutable time-stamp for when it was last updated
-    # Has an 'update' method that changes the time-stamp and updates the list of events
-    # Does checks to ensure that all events are Ongoing, and that there is only one Event per site.
-    # Has a 'calculate' downstream impact method that reads in DEM and identifes downstream impact.
-
-class ThamesWaterCurrent(WCCurrent):
-    """Subclass of WCCurrent for Thames Water."""
-    # Overrides the update method and __init__ method to get data from the Thames Water API
-
-class Monitor:
-    """A class that represents the history of a single CSO monitor."""
-    # Has a name, permit number, x and y coordinates, and receiving watercourse etc. 
-    # Has a list of Discharge, Offline and NoDischarge events
-    # Has a single time-series of status (Discharge, Offline, NoDischarge) over time.
-    # Contains total time of discharge, total time of offline, total time of no discharge.
-    # Has a method to plot the time-series of status over time.
-    # Has current status which points to the most recent event.
+        self._event_type = "Not Discharging"
