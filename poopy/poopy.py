@@ -3,10 +3,17 @@ import datetime
 import warnings
 import pickle
 from typing import Union, Optional, List, Dict, Tuple
+from geojson import FeatureCollection
 import numpy as np
 from landlab import RasterModelGrid
 from landlab.components.flow_accum.flow_accum_bw import find_drainage_area_and_discharge
-from poopy.aux import geographic_coords_to_model_xy, model_xy_to_geographic_coords
+from poopy.aux import (
+    geographic_coords_to_model_xy,
+    model_xy_to_geographic_coords,
+    profiler_data_struct_to_geojson,
+    save_json,
+)
+from poopy.profiler import ChannelProfiler
 
 
 class Monitor:
@@ -292,6 +299,8 @@ class WaterCompany(ABC):
 
     Methods:
         update: Updates the active_monitors list and the timestamp.
+        calculate_downstream_points: Calculate the downstream points for all active discharges. Returns the downstream x and y coordinates and the number of upstream discharges at each point.
+        save_downstream_geojson: Save a geojson (WGS84) of the downstream points for all active discharges. Optionally specify a filename.
     """
 
     def __init__(self, clientID: str, clientSecret: str):
@@ -303,7 +312,7 @@ class WaterCompany(ABC):
             clientID: The client ID for the Water Company API.
             clientSecret: The client secret for the Water Company API.
         """
-        self._name : str = None
+        self._name: str = None
         self._clientID = clientID
         self._clientSecret = clientSecret
         self._active_monitors: Dict[str, Monitor] = self._fetch_active_monitors()
@@ -379,24 +388,23 @@ class WaterCompany(ABC):
         self._active_monitors = self._fetch_active_monitors()
         self._timestamp = datetime.datetime.now()
 
-
-    def calculate_downstream_points(self) -> Tuple[float, float, float]:
+    def calculate_downstream_points(self) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
         """
-        Calculate the downstream points for all active discharges.
-
-        Returns:
-            A tuple of the downstream X coordinates, downstream Y coordinates, and the number of 
-            upstream discharges at each downstream point. 
+        Calculate the downstream points for all active discharges. Returns the downstream x and y coordinates and the number of upstream discharges at each point.
+        Also adds a field to the model grid called 'number_upstream_discharges' that contains the number of upstream discharges at each node.
         """
 
         # Extract all the xy coordinates of active discharges
         grid = self.model_grid
         # Coords of all active discharges in OSGB
         discharge_locs = [
-            (discharge.x_coord, discharge.y_coord) for discharge in self.discharging_monitors
+            (discharge.x_coord, discharge.y_coord)
+            for discharge in self.discharging_monitors
         ]
         # Convert to model grid coordinates
-        locs_model = [geographic_coords_to_model_xy(loc, grid) for loc in discharge_locs]
+        locs_model = [
+            geographic_coords_to_model_xy(loc, grid) for loc in discharge_locs
+        ]
 
         # Get the model grid node ID for each discharge
         nodes = [
@@ -414,6 +422,7 @@ class WaterCompany(ABC):
             r=grid.at_node["flow__receiver_node"],
             runoff=source_array,
         )
+        grid.add_field("number_upstream_discharges", number_upstream_sources)
 
         # Find the downstream nodes of the discharges
         dstr_polluted_nodes = np.where(number_upstream_sources != 0)[0]
@@ -427,3 +436,42 @@ class WaterCompany(ABC):
         )
 
         return downstream_x, downstream_y, n_upstream
+
+    def _get_downstream_geojson(self) -> FeatureCollection:
+        """
+        Get a geojson of the downstream points for all active discharges.
+        """
+        # Raise a warning if number_upstream_discharges is not a field in the model grid
+        # and run the calculate_downstream_points function
+        if "number_upstream_discharges" not in self.model_grid.at_node:
+            warnings.warn(
+                "number_upstream_discharges is not a field in the model grid. Calculating downstream points..."
+            )
+            _, _, _ = self.calculate_downstream_points()
+
+        print("Building downstream geojson...")
+        print("...can take a bit of time...")  
+        cp = ChannelProfiler(
+            self.model_grid,
+            "number_upstream_discharges",
+            minimum_channel_threshold=0.9,
+            minimum_outlet_threshold=0.9,
+        )
+        cp.run_one_step()
+        out_geojson = profiler_data_struct_to_geojson(
+            cp.data_structure, self.model_grid, "number_upstream_discharges"
+        )
+        return out_geojson
+
+    def save_downstream_geojson(self, filename: str = None) -> None:
+        """
+        Save a geojson of the downstream points for all active discharges. Optionally specify a filename.
+        """
+        # File path concatantes the name of the water company with the timestamp of the last update
+        if filename is None:
+            file_path = (
+                f"{self.name}_{self.timestamp.strftime('%Y%m%d_%H%M%S')}.geojson"
+            )
+        else:
+            file_path = filename
+        save_json(self._get_downstream_geojson(), file_path)
