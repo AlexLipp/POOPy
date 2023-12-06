@@ -4,9 +4,9 @@ This notebook provides an example of how to use the `poopy` package to access li
 First, we import the libraries we need.
 """
 from poopy.companies import ThamesWater
-
-# This is just to demonstrate the time varying nature of the data!
+# To help demonstrate the package
 import time
+import matplotlib.pyplot as plt
 
 # The intended way to access active EDM data is by instantiating a
 # `WaterCompany` object, which corresponds to the EDM sensor network
@@ -119,3 +119,30 @@ discharging = tw.discharging_monitors
 print("Printing summary of all discharging CSOs...")
 for monitor in discharging:
     monitor.print_status()
+
+# Now we want to look at the downstream impact of the current sewage
+# discharges. First, we calculate the points downstream of the CSO
+# using the `calculate_downstream_points` method. This returns the
+# downstream points in British National Grid coordinates as well as
+# how many CSOs are upstream of each point.
+
+x, y, n = tw.calculate_downstream_points()
+
+# These can then be plotted using matplotlib. We can see that the
+# number of CSOs upstream of each point increases as we move downstream.
+
+plt.scatter(x, y, c=n)
+plt.xlabel("Easting (m)")
+plt.ylabel("Northing (m)")
+cb = plt.colorbar()
+cb.set_label("Number of CSOs upstream")
+
+# To use this information in other geospatial software, we can save
+# the downstream points as a geojson file using the `save_downstream_geojson`.
+# This is geoJSON line file that contains the downstream river sections.
+# This can be loaded into QGIS or other GIS software. By default, the file
+# is saved as a .geojson with a name concatenating the water company name
+# and the most recent update time. Note this function can be slow for large
+# networks.
+
+tw.save_downstream_geojson()
