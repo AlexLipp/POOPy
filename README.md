@@ -8,12 +8,19 @@ This is a lightweight Python package for interfacing with Event Duration Monitor
 
 ## Installation
 
-Install this package by running the following command:
+Install this package by running the following command (replacing `[LOCAL DIRECTORY]` with the directory you wish to install the package into).
 
 ```bash
+git clone https://github.com/AlexLipp/POOPy.git [LOCAL DIRECTORY]
 pip install .
 ```
 
 ## Usage 
+
+Once installed, the package can be imported into Python scripts using the following command.
+
+```python
+import poopy
+```
 
 Some examples of use are given in the `examples` folder.
