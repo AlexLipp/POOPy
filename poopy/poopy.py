@@ -28,6 +28,7 @@ class Monitor:
         receiving_watercourse: The receiving watercourse of the site.
         water_company: The water company that the monitor belongs to.
         current_status: The current status of the monitor.
+        discharge_in_last_48h: Whether the monitor has discharged in the last 48 hours.
         current_event: The current event at the monitor.
         history: The history of events at the monitor.
 
@@ -43,6 +44,7 @@ class Monitor:
         y_coord: float,
         receiving_watercourse: str,
         water_company: "WaterCompany",
+        discharge_in_last_48h: Optional[bool] = None,
     ) -> None:
         """
         Initialize attributes to describe a CSO monitor.
@@ -54,6 +56,7 @@ class Monitor:
             y_coord: The Y coordinate of the site.
             receiving_watercourse: The receiving watercourse of the site.
             water_company: The water company that the monitor belongs to.
+            discharge_in_last_48h: Whether the monitor has discharged in the last 48 hours.
         """
         self._site_name: str = site_name
         self._permit_number: str = permit_number
@@ -62,6 +65,7 @@ class Monitor:
         self._receiving_watercourse: str = receiving_watercourse
         self._water_company: WaterCompany = water_company
         self._current_event: Event = None
+        self._discharge_in_last_48h: bool = discharge_in_last_48h
         self._history: List[Event]
 
     @property
@@ -106,6 +110,13 @@ class Monitor:
     def current_event(self) -> "Event":
         """Return the current event of the monitor."""
         return self._current_event
+
+    @property
+    def discharge_in_last_48h(self) -> bool:
+        # Raise a warning if the discharge_in_last_48h is not set
+        if self._discharge_in_last_48h is None:
+            warnings.warn("discharge_in_last_48h is not set. Returning None.")
+        return self._discharge_in_last_48h
 
     @current_event.setter
     def current_event(self, event: "Event") -> None:
@@ -336,8 +347,8 @@ class WaterCompany(ABC):
         """
         return pooch.retrieve(
             # URL to one of Pooch's test files
-            url=url, 
-            known_hash=known_hash, 
+            url=url,
+            known_hash=known_hash,
             processor=pooch.Unzip(),
         )[0]
 
@@ -382,6 +393,15 @@ class WaterCompany(ABC):
         ]
 
     @property
+    def recently_discharging_monitors(self) -> List[Monitor]:
+        """Return a list of all monitors that have discharged in the last 48 hours."""
+        return [
+            monitor
+            for monitor in self._active_monitors.values()
+            if monitor.discharge_in_last_48h
+        ]
+
+    @property
     def model_grid(self) -> RasterModelGrid:
         """Return the model grid that the monitors are located on for routing flow."""
         if self._model_grid is None:
@@ -399,19 +419,28 @@ class WaterCompany(ABC):
         self._active_monitors = self._fetch_active_monitors()
         self._timestamp = datetime.datetime.now()
 
-    def calculate_downstream_points(self) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
+    def calculate_downstream_points(
+        self, include_recent_discharges: bool = False
+    ) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
         """
         Calculate the downstream points for all active discharges. Returns the downstream x and y coordinates and the number of upstream discharges at each point.
-        Also adds a field to the model grid called 'number_upstream_discharges' that contains the number of upstream discharges at each node.
+        Also adds a field to the model grid called 'number_upstream_discharges' that contains the number of upstream discharges at each node. The optional argument 
+        include_recent_discharges allows you to include discharges that have occurred in the last 48 hours.
         """
 
         # Extract all the xy coordinates of active discharges
         grid = self.model_grid
         # Coords of all active discharges in OSGB
-        discharge_locs = [
-            (discharge.x_coord, discharge.y_coord)
-            for discharge in self.discharging_monitors
-        ]
+        if not include_recent_discharges:
+            discharge_locs = [
+                (discharge.x_coord, discharge.y_coord)
+                for discharge in self.discharging_monitors
+            ]
+        else:
+            discharge_locs = [
+                (discharge.x_coord, discharge.y_coord)
+                for discharge in self.recently_discharging_monitors
+            ]
         # Convert to model grid coordinates
         locs_model = [
             geographic_coords_to_model_xy(loc, grid) for loc in discharge_locs
@@ -433,7 +462,7 @@ class WaterCompany(ABC):
             r=grid.at_node["flow__receiver_node"],
             runoff=source_array,
         )
-        grid.add_field("number_upstream_discharges", number_upstream_sources)
+        grid.add_field("number_upstream_discharges", number_upstream_sources, clobber=True)
 
         # Find the downstream nodes of the discharges
         dstr_polluted_nodes = np.where(number_upstream_sources != 0)[0]

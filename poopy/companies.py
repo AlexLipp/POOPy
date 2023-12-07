@@ -88,6 +88,7 @@ class ThamesWater(WaterCompany):
             y_coord=row["Y"],
             receiving_watercourse=row["ReceivingWaterCourse"],
             water_company=self,
+            discharge_in_last_48h=row["AlertPast48Hours"],
         )
         return monitor
 
