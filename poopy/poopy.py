@@ -315,7 +315,6 @@ class WaterCompany(ABC):
         Initialize attributes to describe a Water Company network.
 
         Args:
-            name: The name of the Water Company network.
             clientID: The client ID for the Water Company API.
             clientSecret: The client secret for the Water Company API.
         """
