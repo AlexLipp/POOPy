@@ -101,14 +101,13 @@ class Monitor:
     @property
     def current_status(self) -> str:
         """Return the current status of the monitor."""
-        if self._current_event is None:
-            raise ValueError("Current event is not set.")
-        else:
-            return self._current_event.event_type
+        return self._current_event.event_type
 
     @property
     def current_event(self) -> "Event":
         """Return the current event of the monitor."""
+        if self._current_event is None:
+            raise ValueError("Current event is not set.")
         return self._current_event
 
     @property
@@ -128,10 +127,7 @@ class Monitor:
 
     def print_status(self) -> None:
         """Print the current status of the monitor."""
-        if self._current_event is None:
-            raise ValueError("Current event is not set.")
-        else:
-            self._current_event.print_status()
+        self._current_event.print_status()
 
     # TODO Add a function to get the history of events
     # TODO Add a plot history function
@@ -424,7 +420,7 @@ class WaterCompany(ABC):
     ) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
         """
         Calculate the downstream points for all active discharges. Returns the downstream x and y coordinates and the number of upstream discharges at each point.
-        Also adds a field to the model grid called 'number_upstream_discharges' that contains the number of upstream discharges at each node. The optional argument 
+        Also adds a field to the model grid called 'number_upstream_discharges' that contains the number of upstream discharges at each node. The optional argument
         include_recent_discharges allows you to include discharges that have occurred in the last 48 hours.
         """
 
@@ -462,7 +458,9 @@ class WaterCompany(ABC):
             r=grid.at_node["flow__receiver_node"],
             runoff=source_array,
         )
-        grid.add_field("number_upstream_discharges", number_upstream_sources, clobber=True)
+        grid.add_field(
+            "number_upstream_discharges", number_upstream_sources, clobber=True
+        )
 
         # Find the downstream nodes of the discharges
         dstr_polluted_nodes = np.where(number_upstream_sources != 0)[0]
