@@ -4,7 +4,7 @@
 
 ## Description
 
-This is a lightweight Python package for interfacing with Event Duration Monitoring (EDM) devices maintained by English Water Companies.
+This is a Python package for interfacing with Event Duration Monitoring (EDM) devices maintained by English Water Companies.
 
 ## Installation
 
