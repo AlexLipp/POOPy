@@ -6,6 +6,7 @@ First, we import the libraries we need.
 from poopy.companies import ThamesWater
 # To help demonstrate the package
 import time
+import os
 import matplotlib.pyplot as plt
 
 # The intended way to access active EDM data is by instantiating a
@@ -19,20 +20,21 @@ import matplotlib.pyplot as plt
 # in slightly different ways. However, this is all done 'behind the
 # scenes', so they are all interacted with in the exact same way.
 # The only difference is the name of the class. Lets have a look
-# at the data in Thames Water's active EDM monitors... This requires
-# us to specify access codes for the API which you can obtain
-# [here](https://data.thameswater.co.uk/s/)
+# at the data in Thames Water's active EDM monitors... 
+# 
+# To access the Thames Water API you need to specify access codes
+# for the API which you can obtain [here](https://data.thameswater.co.uk/s/). 
+# For security reasons, we have not included our access codes in this 
+# script. Instead, we assume that they have been set as environment
+# variables. If you are running this script on your own machine, you
+# will need to set these environment variables yourself. 
 
-tw_clientID = "REPLACE_WITH_YOUR_ID"
-tw_clientSecret = "REPLACE_WITH_YOUR_SECRET"
 
-if (
-    tw_clientID == "REPLACE_WITH_YOUR_ID"
-    or tw_clientSecret == "REPLACE_WITH_YOUR_SECRET"
-):
-    raise ValueError(
-        "You need to set your Thames Water client ID and client secret in the script!"
-    )
+tw_clientID = os.getenv("TW_CLIENT_ID")
+tw_clientSecret = os.getenv("TW_CLIENT_SECRET")
+
+if tw_clientID is None or tw_clientSecret is None:
+    raise ValueError("Thames Water API keys are missing from the environment!\n Please set them and try again.")
 
 tw = ThamesWater(tw_clientID, tw_clientSecret)
 
