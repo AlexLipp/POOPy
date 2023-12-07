@@ -74,8 +74,6 @@ class ChannelProfiler(_BaseProfiler):
             minimum_outlet_threshold, minimum_channel_threshold
         )
         outlet_nodes = large_outlet_ids[big_enough_watersheds]
-        print("Identified this many outlet ids:")
-        print(len(outlet_nodes))
 
         starting_vals = self._channel_definition_field[outlet_nodes]
         outlet_nodes = np.asarray(outlet_nodes)
