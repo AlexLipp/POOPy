@@ -2,6 +2,7 @@ from abc import ABC, abstractmethod
 import datetime
 import warnings
 import pickle
+import pooch
 from typing import Union, Optional, List, Dict, Tuple
 from geojson import FeatureCollection
 import numpy as np
@@ -294,7 +295,6 @@ class WaterCompany(ABC):
         clientSecret: The client secret for the Water Company API.
         active_monitors: A dictionary of active monitors accessed by site name.
         active_monitor_names: A list of the names of active monitors.
-        model_grid_file_path: The file path to the model grid that the monitors are located on for routing flow.
         model_grid: The model grid that the monitors are located on for routing flow.
 
     Methods:
@@ -329,6 +329,17 @@ class WaterCompany(ABC):
             A dictionary of active monitors accessed by site name.
         """
         pass
+
+    def _fetch_model_grid_file(self, url: str, known_hash: str) -> str:
+        """
+        Get the path to the model grid file.
+        """
+        return pooch.retrieve(
+            # URL to one of Pooch's test files
+            url=url, 
+            known_hash=known_hash, 
+            processor=pooch.Unzip(),
+        )[0]
 
     # Define the getters for the WaterCompany class
     @property
@@ -450,7 +461,7 @@ class WaterCompany(ABC):
             _, _, _ = self.calculate_downstream_points()
 
         print("Building downstream geojson...")
-        print("...can take a bit of time...")  
+        print("...can take a bit of time...")
         cp = ChannelProfiler(
             self.model_grid,
             "number_upstream_discharges",

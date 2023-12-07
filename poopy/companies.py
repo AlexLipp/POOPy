@@ -11,9 +11,19 @@ class ThamesWater(WaterCompany):
     """
 
     def __init__(self, clientID: str, clientSecret: str):
+        print("\033[36m" + "Initialising Thames Water object..." + "\033[0m")
+        print("\033[36m" + "\tFetching model grid..." + "\033[0m")
+        print(
+            "\033[36m"
+            + "\tThis download can be slow if it is the first time you have generated a ThamesWater object. \n\tThe file will be cached so will be faster on subsequent uses..."
+            + "\033[0m"
+        )
         super().__init__(clientID, clientSecret)
         self._name = "ThamesWater"
-        self._model_grid_file_path = "../sewage/input_dir/mg_elev.obj"
+        self._model_grid_file_path = self._fetch_model_grid_file(
+            url="https://zenodo.org/records/10280997/files/tw_model_grid.zip",
+            known_hash="md5:5da73b57c3b1587476594601943356e9",
+        )
 
     def _fetch_active_monitors(self) -> Dict[str, Monitor]:
         """
@@ -36,7 +46,7 @@ class ThamesWater(WaterCompany):
         # Change the following to indent by a tab and print it in blue print("Requesting current status data from Thames Water API...")
         print(
             "\033[36m"
-            + "\tRequesting current status data from Thames Water API..."
+            + "Requesting current status data from Thames Water API..."
             + "\033[0m"
         )
         api_root = "https://prod-tw-opendata-app.uk-e1.cloudhub.io"
