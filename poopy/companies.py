@@ -3,12 +3,21 @@ import pandas as pd
 from typing import Dict
 
 from poopy.poopy import Monitor, WaterCompany, Discharge, NoDischarge, Offline, Event
+from poopy.aux import fetch_all_API_entries
 
 
 class ThamesWater(WaterCompany):
     """
     A subclass of `WaterCompany` that represents the EDM monitoring network for Thames Water.
     """
+
+    API_ROOT = "https://prod-tw-opendata-app.uk-e1.cloudhub.io"
+    CURRENT_API_RESOURCE = "/data/STE/v1/DischargeCurrentStatus"
+    HISTORICAL_API_RESOURCE = "/data/STE/v1/DischargeAlerts"
+    API_LIMIT = 1000  # Max num of outputs that can be requested from the API at once
+
+    MODEL_GRID_URL = "https://zenodo.org/record/10280997/files/tw_model_grid.zip"
+    MODEL_GRID_HASH = "md5:5da73b57c3b1587476594601943356e9"
 
     def __init__(self, clientID: str, clientSecret: str):
         print("\033[36m" + "Initialising Thames Water object..." + "\033[0m")
@@ -21,15 +30,15 @@ class ThamesWater(WaterCompany):
         super().__init__(clientID, clientSecret)
         self._name = "ThamesWater"
         self._model_grid_file_path = self._fetch_model_grid_file(
-            url="https://zenodo.org/records/10280997/files/tw_model_grid.zip",
-            known_hash="md5:5da73b57c3b1587476594601943356e9",
+            url=self.MODEL_GRID_URL,
+            known_hash=self.MODEL_GRID_HASH,
         )
 
     def _fetch_active_monitors(self) -> Dict[str, Monitor]:
         """
         Get the current status of the monitors by calling the API.
         """
-        df = self._get_current_status_df(self._clientID, self._clientSecret)
+        df = self._get_current_status_df()
         monitors = {}
         for _, row in df.iterrows():
             monitor = self._row_to_monitor(row=row)
@@ -38,7 +47,7 @@ class ThamesWater(WaterCompany):
             monitors[monitor.site_name] = monitor
         return monitors
 
-    def _get_current_status_df(self, clientID: str, clientSecret: str) -> pd.DataFrame:
+    def _get_current_status_df(self) -> pd.DataFrame:
         """
         Get the current status of the monitors by calling the API.
         """
@@ -49,14 +58,12 @@ class ThamesWater(WaterCompany):
             + "Requesting current status data from Thames Water API..."
             + "\033[0m"
         )
-        api_root = "https://prod-tw-opendata-app.uk-e1.cloudhub.io"
-        api_resource = "/data/STE/v1/DischargeCurrentStatus"
-        url = api_root + api_resource
+        url = self.API_ROOT + self.CURRENT_API_RESOURCE
         params = ""
         # send the request
         r = requests.get(
             url,
-            headers={"client_id": clientID, "client_secret": clientSecret},
+            headers={"client_id": self.clientID, "client_secret": self.clientSecret},
             params=params,
         )
         print("\033[36m" + "\tRequesting from " + r.url + "\033[0m")
@@ -70,10 +77,9 @@ class ThamesWater(WaterCompany):
                     r.status_code, r.json()
                 )
             )
-
-        if df.shape[0] == 1000:
+        if df.shape[0] == self.API_LIMIT:
             raise Exception(
-                "\tWarning: Number of outputs is at or exceeds 1000 output limit. \nOutputs may be incomplete"
+                f"\tWarning: Number of outputs is at or exceeds {self.API_LIMIT} output limit. \nOutputs may be incomplete"
             )
         return df
 
