@@ -64,9 +64,8 @@ class Monitor:
         self._y_coord: float = y_coord
         self._receiving_watercourse: str = receiving_watercourse
         self._water_company: WaterCompany = water_company
-        self._current_event: Event = None
         self._discharge_in_last_48h: bool = discharge_in_last_48h
-        self._history: List[Event]
+        self._current_event: Event = None
 
     @property
     def site_name(self) -> str:
@@ -109,6 +108,11 @@ class Monitor:
         if self._current_event is None:
             raise ValueError("Current event is not set.")
         return self._current_event
+
+    @property
+    def history(self) -> List["Event"]:
+        """Return a list of all past events at the monitor."""
+        return self.water_company._get_monitor_history(self)
 
     @property
     def discharge_in_last_48h(self) -> bool:
@@ -333,6 +337,19 @@ class WaterCompany(ABC):
 
         Returns:
             A dictionary of active monitors accessed by site name.
+        """
+        pass
+
+    @abstractmethod
+    def _get_monitor_history(self, monitor: Monitor) -> List[Event]:
+        """
+        Get the history of events for a monitor.
+
+        Args:
+            monitor: The monitor for which to get the history.
+
+        Returns:
+            A list of events.
         """
         pass
 

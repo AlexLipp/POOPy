@@ -1,9 +1,10 @@
 import requests
 import pandas as pd
-from typing import Dict
+from typing import Dict, List
 
 from poopy.poopy import Monitor, WaterCompany, Discharge, NoDischarge, Offline, Event
-from poopy.aux import fetch_all_API_entries
+
+import warnings
 
 
 class ThamesWater(WaterCompany):
@@ -51,37 +52,185 @@ class ThamesWater(WaterCompany):
         """
         Get the current status of the monitors by calling the API.
         """
-
-        # Change the following to indent by a tab and print it in blue print("Requesting current status data from Thames Water API...")
         print(
             "\033[36m"
             + "Requesting current status data from Thames Water API..."
             + "\033[0m"
         )
         url = self.API_ROOT + self.CURRENT_API_RESOURCE
-        params = ""
-        # send the request
-        r = requests.get(
-            url,
-            headers={"client_id": self.clientID, "client_secret": self.clientSecret},
-            params=params,
-        )
-        print("\033[36m" + "\tRequesting from " + r.url + "\033[0m")
-        # check response status and use only valid requests
-        if r.status_code == 200:
-            response = r.json()
-            df = pd.json_normalize(response, "items")
-        else:
-            raise Exception(
-                "\tRequest failed with status code {0}, and error message: {1}".format(
-                    r.status_code, r.json()
-                )
-            )
-        if df.shape[0] == self.API_LIMIT:
-            raise Exception(
-                f"\tWarning: Number of outputs is at or exceeds {self.API_LIMIT} output limit. \nOutputs may be incomplete"
-            )
+        params = {
+            "limit": self.API_LIMIT,
+            "offset": 0,
+        }
+        df = self._handle_api_response(url=url, params=params)
+
         return df
+
+    def _handle_api_response(self, url: str, params: str) -> pd.DataFrame:
+        """
+        Creates and handles the response from the API. If the response is valid, return a dataframe of the response.
+        Otherwise, raise an exception. This is a helper function for the `_get_current_status_df` and `_get_monitor_history_df` functions.
+        Loops through the API calls until all the records are fetched.
+        """
+        df = pd.DataFrame()
+        while True:
+            r = requests.get(
+                url,
+                headers={
+                    "client_id": self.clientID,
+                    "client_secret": self.clientSecret,
+                },
+                params=params,
+            )
+
+            print("\033[36m" + "\tRequesting from " + r.url + "\033[0m")
+            # check response status and use only valid requests
+            if r.status_code == 200:
+                response = r.json()
+                # If no items are returned, return an empty dataframe
+                if "items" not in response:
+                    print("\033[36m" + "\tNo more records to fetch" + "\033[0m")
+                    break
+                else:
+                    df_temp = pd.json_normalize(response["items"])
+            else:
+                raise Exception(
+                    "\tRequest failed with status code {0}, and error message: {1}".format(
+                        r.status_code, r.json()
+                    )
+                )
+            df = pd.concat([df, df_temp])
+            params["offset"] += params["limit"]  # Increment offset for the next request
+
+        return df
+
+    def _get_monitor_history_df(self, monitor: Monitor) -> pd.DataFrame:
+        """
+        Get the historical status of a monitor by calling the API.
+        """
+        print(
+            "\033[36m"
+            + f"Requesting historical data for {monitor.site_name} from Thames Water API..."
+            + "\033[0m"
+        )
+        url = self.API_ROOT + self.HISTORICAL_API_RESOURCE
+        params = {
+            "limit": self.API_LIMIT,
+            "offset": 0,
+            "col_1": "LocationName",
+            "operand_1": "eq",
+            "value_1": monitor.site_name,
+        }
+        df = self._handle_api_response(url=url, params=params)
+        df.reset_index(drop=True, inplace=True)
+        return df
+
+    def _get_monitor_history(self, monitor: Monitor) -> List[Event]:
+        """
+        Creates a list of historical Event objects from the alert stream for a given monitor.
+        This is done by iterating through the alert stream and creating an Event object for each
+        start/stop event pair. If the alert stream is invalid, a warning is raised and the entry is skipped.
+        If the alert stream is empty, an empty list is returned.
+
+        Args:
+            monitor (Monitor): The monitor for which to create the history
+
+        Returns:
+            List[Event]: A list of Event objects representing the historical events for the monitor
+        """
+
+        def _warn(reason: str) -> None:
+            """Automatically raises a warning with the correct message"""
+            warnings.warn(
+                f"\033[91m! WARNING ! Alert stream for monitor {monitor.site_name} contains an invalid entry! \nReason: {reason}. Skipping that entry...\033[0m"
+            )
+        # Get the historical data for the monitor from the API
+        historical_df = self._get_monitor_history_df(monitor)
+        print("\033[36m" + f"Building history for {monitor.site_name}..." + "\033[0m")
+        history = []
+        history.append(monitor.current_event)
+        if historical_df.empty:
+            # If the dataframe is empty, there are no events to create
+            return []
+
+        for index, row in historical_df.iterrows():
+            n_rows = len(historical_df)
+            next_index = index + 1
+
+            if index == n_rows - 1:
+                # At the last entry in the df...
+                if not (
+                    (row["AlertType"] == "Start")
+                    or (row["AlertType"] == "Offline start")
+                ):
+                    # ... and it's not a start event!
+                    reason = "the last recorded event is not a Start event!"
+                    _warn(reason)
+                else:
+                    break
+
+            if row["AlertType"] == "Stop":
+                # Found the end of an event...
+                if historical_df.iloc[next_index]["AlertType"] != "Start":
+                    # ... but it's not preceded by a start event!
+                    reason = f"a stop event was not preceded by Start event at {historical_df.iloc[index]['DateTime']}"
+                    _warn(reason)
+                    continue
+                else:
+                    # ... its preceded by a start event, so we create a Discharge event!
+                    stop = pd.to_datetime(row["DateTime"])
+                    start = pd.to_datetime(historical_df.iloc[next_index]["DateTime"])
+                    event = Discharge(
+                        monitor=monitor, ongoing=False, start_time=start, end_time=stop
+                    )
+                    history.append(event)
+
+            if row["AlertType"] == "Offline stop":
+                # Found the end of an offline event...
+                if historical_df.iloc[next_index]["AlertType"] != "Offline start":
+                    # ... but it's not preceded by an offline start event!
+                    reason = f"an offline Stop event was not preceded by Offline Start event at {historical_df.iloc[index]['DateTime']}"
+                    _warn(reason)
+                    continue
+                else:
+                    # ... its preceded by an offline start event, so we create an Offline event!
+                    stop = pd.to_datetime(row["DateTime"])
+                    start = pd.to_datetime(historical_df.iloc[index + 1]["DateTime"])
+                    event = Offline(
+                        monitor=monitor, ongoing=False, start_time=start, end_time=stop
+                    )
+                    history.append(event)
+
+            if row["AlertType"] == "Start" or row["AlertType"] == "Offline start":
+                # Found the start of an event...
+                if index == n_rows - 1:
+                    # ... but it's the last entry in the df, so we can't create an event! Quit the loop.
+                    break
+                else:
+                    if (
+                        historical_df.iloc[next_index]["AlertType"] == "Start"
+                        or historical_df.iloc[next_index]["AlertType"]
+                        == "Offline start"
+                    ):
+                        # ... and it's followed by another start event!
+                        reason = f"a Start or Offline Start event was preceded by a Start or Offline Start event at {historical_df.iloc[index]['DateTime']}"
+                        _warn(reason)
+                        continue
+                    else:
+                        # ... and it's not followed by another start event, so we create a NoDischarge event
+                        # to represent the period between the start of this event and the end of the previous event.
+                        stop = pd.to_datetime(row["DateTime"])
+                        start = pd.to_datetime(
+                            historical_df.iloc[next_index]["DateTime"]
+                        )
+                        event = NoDischarge(
+                            monitor=monitor,
+                            ongoing=False,
+                            start_time=start,
+                            end_time=stop,
+                        )
+                        history.append(event)
+        return history
 
     def _row_to_monitor(self, row: pd.DataFrame) -> Monitor:
         """

@@ -1,6 +1,12 @@
+"""
+Auxiliary functions for the poopy package that are used in multiple modules.
+"""
+
 from landlab import RasterModelGrid
-from typing import Tuple
+from typing import Tuple, Dict, Any
 import numpy as np
+import pandas as pd
+import requests
 import json
 from geojson import FeatureCollection, Feature, LineString
 from osgeo import osr
@@ -32,6 +38,7 @@ def model_xy_to_geographic_coords(
     x = xy_of_upper_left[0] + model_xy_coords[0] * grid.dx
     y = xy_of_upper_left[1] - model_xy_coords[1] * grid.dy
     return x, y
+
 
 def ids_to_xyz(
     node_ids: np.ndarray, grid: RasterModelGrid, field: str
