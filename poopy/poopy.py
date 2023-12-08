@@ -34,6 +34,10 @@ class Monitor:
 
     Methods:
         print_status: Print the current status of the monitor.
+        total_discharge: Returns the total discharge in minutes since the given datetime.
+        total_discharge_last_6_months: Returns the total discharge in minutes in the last 6 months (183 days)
+        total_discharge_last_12_months: Returns the total discharge in minutes in the last 12 months (365 days)
+        total_discharge_since_start_of_year: Returns the total discharge in minutes since the start of the year
     """
 
     def __init__(
@@ -133,13 +137,49 @@ class Monitor:
         """Print the current status of the monitor."""
         self._current_event.print_status()
 
-    # TODO Add a function to get the history of events
+    def total_discharge(
+        self, since: datetime.datetime = datetime.datetime(2000, 1, 1)
+    ) -> float:
+        """Returns the total discharge in minutes since the given datetime.
+        If no datetime is given, it will return the total discharge since records began
+        (arbitrarily this is set to be 1/1/2000)
+        """
+        history = self.history
+        total = 0.0
+        for event in history:
+            if event.event_type == "Discharging":
+                if event.ongoing:
+                    total += event.duration
+                else:
+                    # If the end time is before the cut off date, we can skip this event and quit the entire loop
+                    if event.end_time < since:
+                        break
+                    # If the endtime is after since but start_time is before, we take the difference between the end time and since
+                    elif (event.end_time > since) and (event.start_time < since):
+                        total += (event.end_time - since).total_minutes()
+                    elif event.end_time > since:
+                        total += event.duration
+        return total
+
+    def total_discharge_last_6_months(self) -> float:
+        """Returns the total discharge in minutes in the last 6 months (183 days)"""
+        return self.total_discharge(
+            since=datetime.datetime.now() - datetime.timedelta(days=183)
+        )
+
+    def total_discharge_last_12_months(self) -> float:
+        """Returns the total discharge in minutes in the last 12 months (365 days)"""
+        return self.total_discharge(
+            since=datetime.datetime.now() - datetime.timedelta(days=365)
+        )
+
+    def total_discharge_since_start_of_year(self) -> float:
+        """Returns the total discharge in minutes since the start of the year"""
+        return self.total_discharge(
+            since=datetime.datetime(datetime.datetime.now().year, 1, 1)
+        )
+
     # TODO Add a plot history function
-    # TODO Add a 'cumulative discharge' function that sums the duration of all discharge events with optional "since" argument
-    # TODO Add a 'total offline' function that sums the duration of all offline events with optional "since" argument
-    # TODO Add a 'total not discharging' function that sums the duration of all not discharging events with optional "since" argument
-    # TODO Add a _validate_history function that checks that the history is valid (i.e. no overlapping events, no ongoing events, etc.)
-    # TODO Add a 'last_event' function that returns the last discharge event in the history
 
 
 class Event(ABC):
