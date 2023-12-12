@@ -34,6 +34,7 @@ class Monitor:
 
     Methods:
         print_status: Print the current status of the monitor.
+        get_history: Get the historical discharge information for the monitor and store it in the history attribute.
         total_discharge: Returns the total discharge in minutes since the given datetime.
         total_discharge_last_6_months: Returns the total discharge in minutes in the last 6 months (183 days)
         total_discharge_last_12_months: Returns the total discharge in minutes in the last 12 months (365 days)
@@ -70,6 +71,7 @@ class Monitor:
         self._water_company: WaterCompany = water_company
         self._discharge_in_last_48h: bool = discharge_in_last_48h
         self._current_event: Event = None
+        self._history: List[Event] = None
 
     @property
     def site_name(self) -> str:
@@ -113,11 +115,19 @@ class Monitor:
             raise ValueError("Current event is not set.")
         return self._current_event
 
+    def get_history(self) -> None:
+        """
+        Get the historical data for the monitor and store it in the history attribute.
+        """ 
+        self._history = self.water_company._get_monitor_history(self)
+    
     @property
     def history(self) -> List["Event"]:
         """Return a list of all past events at the monitor."""
-        return self.water_company._get_monitor_history(self)
-
+        if self._history is None:
+            raise ValueError("History is not yet set. Run get_history() first.")
+        return self._history
+    
     @property
     def discharge_in_last_48h(self) -> bool:
         # Raise a warning if the discharge_in_last_48h is not set
@@ -135,6 +145,8 @@ class Monitor:
 
     def print_status(self) -> None:
         """Print the current status of the monitor."""
+        if self._current_event is None:
+            print("No current event at this Monitor.")
         self._current_event.print_status()
 
     def total_discharge(
@@ -340,16 +352,17 @@ class WaterCompany(ABC):
     A class that represents the EDM monitoring network for a Water Company.
 
     Attributes:
-        name: The name of the Water Company network.
+        name: The name of the Water Company network (set by the child class).
         timestamp: The timestamp of the last update.
-        clientID: The client ID for the Water Company API.
-        clientSecret: The client secret for the Water Company API.
+        clientID: The client ID for the Water Company API (set by the child class).
+        clientSecret: The client secret for the Water Company API (set by the child class).
         active_monitors: A dictionary of active monitors accessed by site name.
         active_monitor_names: A list of the names of active monitors.
         model_grid: The model grid that the monitors are located on for routing flow.
 
     Methods:
         update: Updates the active_monitors list and the timestamp.
+        get_history: Get the historical data for all active monitors and store it in the history attribute of each monitor in the active_monitors attribute.
         calculate_downstream_points: Calculate the downstream points for all active discharges. Returns the downstream x and y coordinates and the number of upstream discharges at each point.
         save_downstream_geojson: Save a geojson (WGS84) of the downstream points for all active discharges. Optionally specify a filename.
     """
@@ -393,9 +406,18 @@ class WaterCompany(ABC):
         """
         pass
 
+    @abstractmethod
+    def get_history(self) -> None:
+        """
+        Get the historical data for all active monitors and store it in the history attribute of each monitor in the active_monitors attribute.
+        """
+        pass
+
     def _fetch_model_grid_file(self, url: str, known_hash: str) -> str:
         """
-        Get the path to the model grid file.
+        Get the path to the model grid file. If the file is not present, it will download it from the given url and unzip it.
+        This is all handled by the pooch package. The hash of the file is checked against the known hash to ensure the file is not corrupted.
+        If the file is already present in the pooch cache, it will not be downloaded again.
         """
         return pooch.retrieve(
             # URL to one of Pooch's test files
