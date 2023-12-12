@@ -15,6 +15,7 @@ from poopy.aux import (
     save_json,
 )
 from poopy.profiler import ChannelProfiler
+import matplotlib.pyplot as plt
 
 
 class Monitor:
@@ -35,6 +36,7 @@ class Monitor:
     Methods:
         print_status: Print the current status of the monitor.
         get_history: Get the historical discharge information for the monitor and store it in the history attribute.
+        plot_history: Plot the history of events at the monitor. Optionally specify a start date to plot from.
         total_discharge: Returns the total discharge in minutes since the given datetime.
         total_discharge_last_6_months: Returns the total discharge in minutes in the last 6 months (183 days)
         total_discharge_last_12_months: Returns the total discharge in minutes in the last 12 months (365 days)
@@ -118,16 +120,16 @@ class Monitor:
     def get_history(self) -> None:
         """
         Get the historical data for the monitor and store it in the history attribute.
-        """ 
+        """
         self._history = self.water_company._get_monitor_history(self)
-    
+
     @property
     def history(self) -> List["Event"]:
         """Return a list of all past events at the monitor."""
         if self._history is None:
             raise ValueError("History is not yet set. Run get_history() first.")
         return self._history
-    
+
     @property
     def discharge_in_last_48h(self) -> bool:
         # Raise a warning if the discharge_in_last_48h is not set
@@ -147,25 +149,26 @@ class Monitor:
         """Print the current status of the monitor."""
         if self._current_event is None:
             print("No current event at this Monitor.")
-        self._current_event.print_status()
+        self._current_event.print()
 
     def total_discharge(
-        self, since: datetime.datetime = datetime.datetime(2000, 1, 1)
+        self, since: datetime.datetime = None
     ) -> float:
         """Returns the total discharge in minutes since the given datetime.
         If no datetime is given, it will return the total discharge since records began
-        (arbitrarily this is set to be 1/1/2000)
         """
         history = self.history
         total = 0.0
+        if since is None:
+            since = datetime.datetime(2000, 1, 1) # A long time ago
         for event in history:
             if event.event_type == "Discharging":
                 if event.ongoing:
                     total += event.duration
                 else:
-                    # If the end time is before the cut off date, we can skip this event and quit the entire loop
+                    # If the end time is before the cut off date, we can skip this event 
                     if event.end_time < since:
-                        break
+                        continue
                     # If the endtime is after since but start_time is before, we take the difference between the end time and since
                     elif (event.end_time > since) and (event.start_time < since):
                         total += (event.end_time - since).total_minutes()
@@ -178,7 +181,7 @@ class Monitor:
         return self.total_discharge(
             since=datetime.datetime.now() - datetime.timedelta(days=183)
         )
-
+    
     def total_discharge_last_12_months(self) -> float:
         """Returns the total discharge in minutes in the last 12 months (365 days)"""
         return self.total_discharge(
@@ -191,7 +194,47 @@ class Monitor:
             since=datetime.datetime(datetime.datetime.now().year, 1, 1)
         )
 
-    # TODO Add a plot history function
+    def plot_history(self, since: datetime.datetime = None) -> None:
+        """Plot the history of events at the monitor. Optionally specify a start date to plot from.
+        If no start date is specified, it will plot from the first recorded Discharge or Offline event.
+        """
+
+        events = self.history
+        plt.figure(figsize=(10, 2))
+        for event in events:
+            start = event.start_time
+            if event.ongoing:
+                end = datetime.datetime.now()
+            else:
+                end = event.end_time
+            if event.event_type == "Discharging":
+                color = "#8B4513"
+            if event.event_type == "Offline":
+                color = "grey"
+            if event.event_type == "Not Discharging":
+                continue
+
+            # Create a figure that is wide and not very tall
+            # Plot a polygon for each event that extends from the start to the end of the event
+            # and from y = 0 to y = 1
+            plt.fill_between([start, end], 0, 1, color=color)
+            # Remove all y axis ticks and labels
+            plt.yticks([])
+            plt.ylabel("")
+            plt.ylim(0, 1)
+            # Set the x axis limits to the start and end of the event list
+            if since is None:
+                minx, maxx = events[-1].start_time, datetime.datetime.now()
+            else:
+                minx, maxx = since, datetime.datetime.now()
+            plt.xlim(minx, maxx)
+            # Set the title to the name of the monitor
+            total_discharge = self.total_discharge(since=since)
+
+            plt.title(self.site_name + "\n" + f"Total Discharge: {round(total_discharge,2)} minutes")
+            plt.tight_layout()
+
+        plt.show()
 
 
 class Event(ABC):
@@ -230,7 +273,7 @@ class Event(ABC):
             event_type: The type of event. Defaults to "Unknown".
 
         Methods:
-            print_status: Print a summary of the event.
+            print: Print a summary of the event.
         """
         self._monitor = monitor
         self._start_time = start_time
@@ -296,7 +339,7 @@ class Event(ABC):
             self._end_time = datetime.datetime.now()
             self._duration = self.duration
 
-    def print_status(self) -> None:
+    def print(self) -> None:
         """Print a summary of the event."""
 
         # Define a dictionary of colours for the event types
@@ -485,7 +528,6 @@ class WaterCompany(ABC):
                 self._model_grid = pickle.load(handle)
         return self._model_grid
 
-    # define an update function that updates the active_monitors list and the timestamp
     def update(self):
         """
         Update the active_monitors list and the timestamp.
