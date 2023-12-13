@@ -2,6 +2,7 @@ from abc import ABC, abstractmethod
 import datetime
 import warnings
 import pickle
+import pandas as pd
 import pooch
 from typing import Union, Optional, List, Dict, Tuple
 from geojson import FeatureCollection
@@ -151,22 +152,20 @@ class Monitor:
             print("No current event at this Monitor.")
         self._current_event.print()
 
-    def total_discharge(
-        self, since: datetime.datetime = None
-    ) -> float:
+    def total_discharge(self, since: datetime.datetime = None) -> float:
         """Returns the total discharge in minutes since the given datetime.
         If no datetime is given, it will return the total discharge since records began
         """
         history = self.history
         total = 0.0
         if since is None:
-            since = datetime.datetime(2000, 1, 1) # A long time ago
+            since = datetime.datetime(2000, 1, 1)  # A long time ago
         for event in history:
             if event.event_type == "Discharging":
                 if event.ongoing:
                     total += event.duration
                 else:
-                    # If the end time is before the cut off date, we can skip this event 
+                    # If the end time is before the cut off date, we can skip this event
                     if event.end_time < since:
                         continue
                     # If the endtime is after since but start_time is before, we take the difference between the end time and since
@@ -181,7 +180,7 @@ class Monitor:
         return self.total_discharge(
             since=datetime.datetime.now() - datetime.timedelta(days=183)
         )
-    
+
     def total_discharge_last_12_months(self) -> float:
         """Returns the total discharge in minutes in the last 12 months (365 days)"""
         return self.total_discharge(
@@ -231,7 +230,11 @@ class Monitor:
             # Set the title to the name of the monitor
             total_discharge = self.total_discharge(since=since)
 
-            plt.title(self.site_name + "\n" + f"Total Discharge: {round(total_discharge,2)} minutes")
+            plt.title(
+                self.site_name
+                + "\n"
+                + f"Total Discharge: {round(total_discharge,2)} minutes"
+            )
             plt.tight_layout()
 
         plt.show()
@@ -373,6 +376,26 @@ class Discharge(Event):
         super().__init__(*args, **kwargs)
         self._event_type = "Discharging"
 
+    def _to_row(self) -> pd.DataFrame:
+        """
+        Convert a discharge event to a row in a dataframe
+        """
+        row = pd.DataFrame(
+            {
+                "LocationName": self.monitor.site_name,
+                "PermitNumber": self.monitor.permit_number,
+                "X": self.monitor.x_coord,
+                "Y": self.monitor.y_coord,
+                "ReceivingWaterCourse": self.monitor.receiving_watercourse,
+                "StartTime": self.start_time,
+                "StopTime": self.end_time,
+                "Duration": self.duration,
+                "OngoingDischarge": self.ongoing,
+            },
+            index=[0],
+        )
+        return row
+
 
 class Offline(Event):
     """A class to represent a CSO monitor being offline."""
@@ -397,6 +420,7 @@ class WaterCompany(ABC):
     Attributes:
         name: The name of the Water Company network (set by the child class).
         timestamp: The timestamp of the last update.
+        history_timestamp: The timestamp of the last historical data update.
         clientID: The client ID for the Water Company API (set by the child class).
         clientSecret: The client secret for the Water Company API (set by the child class).
         active_monitors: A dictionary of active monitors accessed by site name.
@@ -479,6 +503,11 @@ class WaterCompany(ABC):
     def timestamp(self) -> datetime.datetime:
         """Return the timestamp of the last update."""
         return self._timestamp
+    
+    @property
+    def history_timestamp(self) -> datetime.datetime:
+        """Return the timestamp of the last historical data update."""
+        return self._history_timestamp
 
     @property
     def clientID(self) -> str:
@@ -633,3 +662,31 @@ class WaterCompany(ABC):
         else:
             file_path = filename
         save_json(self._get_downstream_geojson(), file_path)
+
+
+    def history_to_discharge_df(self) -> pd.DataFrame:
+        """
+        Convert a water company's discharge history to a dataframe
+        """
+        df = pd.DataFrame()
+        for monitor in self.active_monitors.values():
+            print(f"Processing {monitor.site_name}")
+            for event in monitor.history:
+                if event.event_type == "Discharging":
+                    df = pd.concat([df, event._to_row()], ignore_index=True)
+
+        df.sort_values(by="StartTime", inplace=True, ignore_index=True)
+        return df
+
+
+    def save_history_json(self, filename: str = None) -> None:
+        """
+        Save a water company's discharge history to a JSON file
+        """
+        if filename is None:
+            file_path = f"{self.name}_{self.history_timestamp.strftime('%Y%m%d_%H%M%S')}.json"
+        else:
+            file_path = filename
+
+        df = self.history_to_discharge_df()
+        df.to_json(file_path)

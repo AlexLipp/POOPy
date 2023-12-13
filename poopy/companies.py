@@ -1,3 +1,4 @@
+import datetime
 import requests
 import pandas as pd
 from typing import Dict, List
@@ -40,6 +41,7 @@ class ThamesWater(WaterCompany):
         Get the historical data for all active monitors and store it in the history attribute
         of each monitor in the active_monitors attribute.
         """
+        self._history_timestamp = datetime.datetime.now()
         df = self._get_all_monitors_history_df()
         historical_names = df["LocationName"].unique().tolist()
         # Find which monitors present in historical_names are not in active_names
