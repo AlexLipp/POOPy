@@ -1,11 +1,11 @@
 import datetime
 import requests
-import pandas as pd
+import warnings
 from typing import Dict, List
 
-from poopy.poopy import Monitor, WaterCompany, Discharge, NoDischarge, Offline, Event
+import pandas as pd
 
-import warnings
+from poopy.poopy import Discharge, Event, Monitor, NoDischarge, Offline, WaterCompany
 
 
 class ThamesWater(WaterCompany):

@@ -1,22 +1,23 @@
 from abc import ABC, abstractmethod
 import datetime
-import warnings
 import pickle
+import warnings
+from typing import Dict, List, Optional, Tuple, Union
+
+import matplotlib.pyplot as plt
+import numpy as np
 import pandas as pd
 import pooch
-from typing import Union, Optional, List, Dict, Tuple
 from geojson import FeatureCollection
-import numpy as np
 from landlab import RasterModelGrid
 from landlab.components.flow_accum.flow_accum_bw import find_drainage_area_and_discharge
+
 from poopy.aux import (
     geographic_coords_to_model_xy,
-    model_xy_to_geographic_coords,
     profiler_data_struct_to_geojson,
     save_json,
 )
 from poopy.profiler import ChannelProfiler
-import matplotlib.pyplot as plt
 
 
 class Monitor:

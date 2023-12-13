@@ -1,14 +1,9 @@
-"""
-Auxiliary functions for the poopy package that are used in multiple modules.
-"""
-
-from landlab import RasterModelGrid
-from typing import Tuple, Dict, Any
-import numpy as np
-import pandas as pd
-import requests
 import json
-from geojson import FeatureCollection, Feature, LineString
+from typing import Tuple
+
+import numpy as np
+from geojson import Feature, FeatureCollection, LineString
+from landlab import RasterModelGrid
 
 
 def geographic_coords_to_model_xy(
@@ -49,6 +44,7 @@ def ids_to_xyz(
     xs, ys = model_xy_to_geographic_coords((model_xs, model_ys), grid)
     vals = grid.at_node[field][node_ids]
     return (xs, ys, vals)
+
 
 def profiler_data_struct_to_geojson(
     profiler_data_struct, grid: RasterModelGrid, field: str
