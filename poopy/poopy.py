@@ -430,7 +430,9 @@ class WaterCompany(ABC):
     Methods:
         update: Updates the active_monitors list and the timestamp.
         get_history: Get the historical data for all active monitors and store it in the history attribute of each monitor in the active_monitors attribute.
-        calculate_downstream_points: Calculate the downstream points for all active discharges. Returns the downstream x and y coordinates and the number of upstream discharges at each point.
+        history_to_discharge_df: Convert a water company's discharge history to a dataframe
+        save_history_json: Save a water company's discharge history to a JSON file
+        get_downstream_geojson: Get a geojson of the downstream points for all active discharges in BNG coordinates.
         save_downstream_geojson: Save a geojson (WGS84) of the downstream points for all active discharges. Optionally specify a filename.
     """
 
@@ -503,7 +505,7 @@ class WaterCompany(ABC):
     def timestamp(self) -> datetime.datetime:
         """Return the timestamp of the last update."""
         return self._timestamp
-    
+
     @property
     def history_timestamp(self) -> datetime.datetime:
         """Return the timestamp of the last historical data update."""
@@ -564,13 +566,13 @@ class WaterCompany(ABC):
         self._active_monitors = self._fetch_active_monitors()
         self._timestamp = datetime.datetime.now()
 
-    def calculate_downstream_points(
+    def _calculate_downstream_points(
         self, include_recent_discharges: bool = False
     ) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
         """
-        Calculate the downstream points for all active discharges. Returns the downstream x and y coordinates and the number of upstream discharges at each point.
-        Also adds a field to the model grid called 'number_upstream_discharges' that contains the number of upstream discharges at each node. The optional argument
-        include_recent_discharges allows you to include discharges that have occurred in the last 48 hours.
+        Calculate the downstream points for all active discharges. Adds a field to the model grid called 'number_upstream_discharges'
+        that contains the number of upstream discharges at each node. The optional argument include_recent_discharges allows you to
+        include discharges that have occurred in the last 48 hours.
         """
 
         # Extract all the xy coordinates of active discharges
@@ -611,29 +613,11 @@ class WaterCompany(ABC):
             "number_upstream_discharges", number_upstream_sources, clobber=True
         )
 
-        # Find the downstream nodes of the discharges
-        dstr_polluted_nodes = np.where(number_upstream_sources != 0)[0]
-        # Number of upstream nodes at sites
-        n_upstream = number_upstream_sources[dstr_polluted_nodes]
-        dstr_polluted_gridy, dstr_polluted_gridx = np.unravel_index(
-            dstr_polluted_nodes, grid.shape
-        )
-        downstream_x, downstream_y = model_xy_to_geographic_coords(
-            (dstr_polluted_gridx, dstr_polluted_gridy), grid
-        )
-
-        return downstream_x, downstream_y, n_upstream
-
-    def _get_downstream_geojson(self) -> FeatureCollection:
+    def get_downstream_geojson(self) -> FeatureCollection:
         """
         Get a geojson of the downstream points for all active discharges in BNG coordinates.
         """
-        if "number_upstream_discharges" not in self.model_grid.at_node:
-            warnings.warn(
-                "number_upstream_discharges is not a field in the model grid. Calculating downstream points..."
-            )
-            _, _, _ = self.calculate_downstream_points()
-
+        self._calculate_downstream_points()
         print("Building downstream geojson...")
         print("...can take a bit of time...")
         cp = ChannelProfiler(
@@ -659,8 +643,7 @@ class WaterCompany(ABC):
             )
         else:
             file_path = filename
-        save_json(self._get_downstream_geojson(), file_path)
-
+        save_json(self.get_downstream_geojson(), file_path)
 
     def history_to_discharge_df(self) -> pd.DataFrame:
         """
@@ -676,13 +659,14 @@ class WaterCompany(ABC):
         df.sort_values(by="StartTime", inplace=True, ignore_index=True)
         return df
 
-
     def save_history_json(self, filename: str = None) -> None:
         """
         Save a water company's discharge history to a JSON file
         """
         if filename is None:
-            file_path = f"{self.name}_{self.history_timestamp.strftime('%Y%m%d_%H%M%S')}.json"
+            file_path = (
+                f"{self.name}_{self.history_timestamp.strftime('%Y%m%d_%H%M%S')}.json"
+            )
         else:
             file_path = filename
 
