@@ -626,10 +626,8 @@ class WaterCompany(ABC):
 
     def _get_downstream_geojson(self) -> FeatureCollection:
         """
-        Get a geojson of the downstream points for all active discharges.
+        Get a geojson of the downstream points for all active discharges in BNG coordinates.
         """
-        # Raise a warning if number_upstream_discharges is not a field in the model grid
-        # and run the calculate_downstream_points function
         if "number_upstream_discharges" not in self.model_grid.at_node:
             warnings.warn(
                 "number_upstream_discharges is not a field in the model grid. Calculating downstream points..."

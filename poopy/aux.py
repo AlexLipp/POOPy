@@ -9,7 +9,6 @@ import pandas as pd
 import requests
 import json
 from geojson import FeatureCollection, Feature, LineString
-from osgeo import osr
 
 
 def geographic_coords_to_model_xy(
@@ -51,26 +50,6 @@ def ids_to_xyz(
     vals = grid.at_node[field][node_ids]
     return (xs, ys, vals)
 
-
-def BNG_to_WGS84_points(
-    eastings: np.ndarray, northings: np.ndarray
-) -> Tuple[np.ndarray, np.ndarray]:
-    """Converts coorindates on British National Grid into Long, Lat on WGS84"""
-
-    OSR_WGS84_REF = osr.SpatialReference()
-    OSR_WGS84_REF.ImportFromEPSG(4326)
-
-    OSR_BNG_REF = osr.SpatialReference()
-    OSR_BNG_REF.ImportFromEPSG(27700)
-
-    OSR_BNG_to_WGS84 = osr.CoordinateTransformation(OSR_BNG_REF, OSR_WGS84_REF)
-    lat_long_tuple_list = OSR_BNG_to_WGS84.TransformPoints(
-        np.vstack([eastings, northings]).T
-    )
-    lat_long_array = np.array(list(map(np.array, lat_long_tuple_list)))
-    return (lat_long_array[:, 1], lat_long_array[:, 0])
-
-
 def profiler_data_struct_to_geojson(
     profiler_data_struct, grid: RasterModelGrid, field: str
 ) -> FeatureCollection:
@@ -80,8 +59,7 @@ def profiler_data_struct_to_geojson(
     for _, segments in profiler_data_struct.items():
         for _, segment in segments.items():
             xs, ys, vals = ids_to_xyz(segment["ids"], grid, field)
-            longs, lats = BNG_to_WGS84_points(xs, ys)
-            features += [xyz_to_linestring(longs, lats, field, vals[-1])]
+            features += [xyz_to_linestring(xs, ys, field, vals[-1])]
 
     return FeatureCollection(features)
 
