@@ -171,7 +171,7 @@ class Monitor:
                         continue
                     # If the endtime is after since but start_time is before, we take the difference between the end time and since
                     elif (event.end_time > since) and (event.start_time < since):
-                        total += (event.end_time - since).total_minutes()
+                        total += (event.end_time - since).total_seconds()/60
                     elif event.end_time > since:
                         total += event.duration
         return total
@@ -218,26 +218,24 @@ class Monitor:
             # Plot a polygon for each event that extends from the start to the end of the event
             # and from y = 0 to y = 1
             plt.fill_between([start, end], 0, 1, color=color)
-            # Remove all y axis ticks and labels
-            plt.yticks([])
-            plt.ylabel("")
-            plt.ylim(0, 1)
-            # Set the x axis limits to the start and end of the event list
-            if since is None:
-                minx, maxx = events[-1].start_time, datetime.datetime.now()
-            else:
-                minx, maxx = since, datetime.datetime.now()
-            plt.xlim(minx, maxx)
             # Set the title to the name of the monitor
-            total_discharge = self.total_discharge(since=since)
-
-            plt.title(
-                self.site_name
-                + "\n"
-                + f"Total Discharge: {round(total_discharge,2)} minutes"
-            )
-            plt.tight_layout()
-
+        # Remove all y axis ticks and labels
+        plt.yticks([])
+        plt.ylabel("")
+        plt.ylim(0, 1)
+        # Set the x axis limits to the start and end of the event list
+        if since is None:
+            minx, maxx = events[-1].start_time, datetime.datetime.now()
+        else:
+            minx, maxx = since, datetime.datetime.now()
+        plt.xlim(minx, maxx)
+        total_discharge = self.total_discharge(since=since)
+        plt.title(
+            self.site_name
+            + "\n"
+            + f"Total Discharge: {round(total_discharge,2)} minutes"
+        )
+        plt.tight_layout()
         plt.show()
 
 
@@ -614,11 +612,13 @@ class WaterCompany(ABC):
             "number_upstream_discharges", number_upstream_sources, clobber=True
         )
 
-    def get_downstream_geojson(self) -> FeatureCollection:
+    def get_downstream_geojson(
+        self, include_recent_discharges: bool = False
+    ) -> FeatureCollection:
         """
         Get a geojson of the downstream points for all active discharges in BNG coordinates.
         """
-        self._calculate_downstream_points()
+        self._calculate_downstream_points(include_recent_discharges)
         print("Building downstream geojson...")
         print("...can take a bit of time...")
         cp = ChannelProfiler(
@@ -635,7 +635,7 @@ class WaterCompany(ABC):
 
     def save_downstream_geojson(self, filename: str = None) -> None:
         """
-        Save a geojson of the downstream points for all active discharges. Optionally specify a filename.
+        Gets the geojson of the downstream points for all active discharges and saves them to file. Optionally specify a filename.
         """
         # File path concatantes the name of the water company with the timestamp of the last update
         if filename is None:
