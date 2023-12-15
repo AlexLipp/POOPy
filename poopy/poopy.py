@@ -171,7 +171,7 @@ class Monitor:
                         continue
                     # If the endtime is after since but start_time is before, we take the difference between the end time and since
                     elif (event.end_time > since) and (event.start_time < since):
-                        total += (event.end_time - since).total_seconds()/60
+                        total += (event.end_time - since).total_seconds() / 60
                     elif event.end_time > since:
                         total += event.duration
         return total
@@ -419,7 +419,7 @@ class WaterCompany(ABC):
     Attributes:
         name: The name of the Water Company network (set by the child class).
         timestamp: The timestamp of the last update.
-        history_timestamp: The timestamp of the last historical data update.
+        history_timestamp: The timestamp of the last historical data update (set in the `get_history` method of the child class).
         clientID: The client ID for the Water Company API (set by the child class).
         clientSecret: The client secret for the Water Company API (set by the child class).
         active_monitors: A dictionary of active monitors accessed by site name.
@@ -650,6 +650,8 @@ class WaterCompany(ABC):
         """
         Convert a water company's discharge history to a dataframe
         """
+        if self.history is None:
+            raise ValueError("History is not yet set. Run get_history() first.")
         df = pd.DataFrame()
         for monitor in self.active_monitors.values():
             print(f"Processing {monitor.site_name}")
@@ -664,12 +666,24 @@ class WaterCompany(ABC):
         """
         Save a water company's discharge history to a JSON file
         """
+        df = self.history_to_discharge_df()
         if filename is None:
             file_path = (
                 f"{self.name}_{self.history_timestamp.strftime('%Y%m%d_%H%M%S')}.json"
             )
         else:
             file_path = filename
-
-        df = self.history_to_discharge_df()
         df.to_json(file_path)
+
+    def save_history_csv(self, filename: str = None) -> None:
+        """
+        Save a water company's discharge history to a csv file
+        """
+        df = self.history_to_discharge_df()
+        if filename is None:
+            file_path = (
+                f"{self.name}_{self.history_timestamp.strftime('%Y%m%d_%H%M%S')}.json"
+            )
+        else:
+            file_path = filename
+        df.to_csv(file_path)
