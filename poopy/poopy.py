@@ -450,6 +450,7 @@ class WaterCompany(ABC):
         self._timestamp: datetime.datetime = datetime.datetime.now()
         self._model_grid_file_path: str = None
         self._model_grid: RasterModelGrid = None
+        self._history: List[Event] = None
 
     @abstractmethod
     def _fetch_active_monitors(self) -> Dict[str, Monitor]:
@@ -509,6 +510,11 @@ class WaterCompany(ABC):
     def history_timestamp(self) -> datetime.datetime:
         """Return the timestamp of the last historical data update."""
         return self._history_timestamp
+    
+    @property
+    def history(self) -> List[Event]:
+        """Return a list of all past events at the monitor."""
+        return self._history
 
     @property
     def clientID(self) -> str:
