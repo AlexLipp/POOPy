@@ -428,9 +428,10 @@ class WaterCompany(ABC):
 
     Methods:
         update: Updates the active_monitors list and the timestamp.
-        get_history: Get the historical data for all active monitors and store it in the history attribute of each monitor in the active_monitors attribute.
-        history_to_discharge_df: Convert a water company's discharge history to a dataframe
+        set_all_histories: Sets the historical data for all active monitors and store it in the history attribute of each monitor.
+        history_to_discharge_df: Convert a water company's total discharge history to a dataframe
         save_history_json: Save a water company's discharge history to a JSON file
+        save_history_csv: Save a water company's discharge history to a csv file
         get_downstream_geojson: Get a geojson of the downstream points for all active discharges in BNG coordinates.
         save_downstream_geojson: Save a geojson (WGS84) of the downstream points for all active discharges. Optionally specify a filename.
     """
@@ -450,7 +451,6 @@ class WaterCompany(ABC):
         self._timestamp: datetime.datetime = datetime.datetime.now()
         self._model_grid_file_path: str = None
         self._model_grid: RasterModelGrid = None
-        self._history: List[Event] = None
 
     @abstractmethod
     def _fetch_active_monitors(self) -> Dict[str, Monitor]:
@@ -476,9 +476,9 @@ class WaterCompany(ABC):
         pass
 
     @abstractmethod
-    def get_history(self) -> None:
+    def set_all_histories(self) -> None:
         """
-        Get the historical data for all active monitors and store it in the history attribute of each monitor in the active_monitors attribute.
+        Sets the historical data for all active monitors and store it in the history attribute of each monitor.
         """
         pass
 
@@ -510,11 +510,6 @@ class WaterCompany(ABC):
     def history_timestamp(self) -> datetime.datetime:
         """Return the timestamp of the last historical data update."""
         return self._history_timestamp
-    
-    @property
-    def history(self) -> List[Event]:
-        """Return a list of all past events at the monitor."""
-        return self._history
 
     @property
     def clientID(self) -> str:
@@ -656,8 +651,11 @@ class WaterCompany(ABC):
         """
         Convert a water company's discharge history to a dataframe
         """
-        if self.history is None:
-            raise ValueError("History is not yet set. Run get_history() first.")
+        if self.history_timestamp is None:
+            raise ValueError(
+                "History may not yet be set. Try running set_all_histories() first."
+            )
+
         df = pd.DataFrame()
         for monitor in self.active_monitors.values():
             print(f"Processing {monitor.site_name}")
@@ -665,7 +663,7 @@ class WaterCompany(ABC):
                 if event.event_type == "Discharging":
                     df = pd.concat([df, event._to_row()], ignore_index=True)
 
-        df.sort_values(by="StartTime", inplace=True, ignore_index=True)
+        df.sort_values(by="StartTime", inplace=True, ignore_index=True, ascending=False)
         return df
 
     def save_history_json(self, filename: str = None) -> None:
@@ -679,6 +677,7 @@ class WaterCompany(ABC):
             )
         else:
             file_path = filename
+        print(f"Saving history to \033[92m{file_path}\033[0m")
         df.to_json(file_path)
 
     def save_history_csv(self, filename: str = None) -> None:
@@ -688,8 +687,9 @@ class WaterCompany(ABC):
         df = self.history_to_discharge_df()
         if filename is None:
             file_path = (
-                f"{self.name}_{self.history_timestamp.strftime('%Y%m%d_%H%M%S')}.json"
+                f"{self.name}_{self.history_timestamp.strftime('%Y%m%d_%H%M%S')}.csv"
             )
         else:
             file_path = filename
-        df.to_csv(file_path)
+        print(f"Saving history to \033[92m{file_path}\033[0m")
+        df.to_csv(file_path, index=False, header=True)

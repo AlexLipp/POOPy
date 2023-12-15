@@ -36,10 +36,9 @@ class ThamesWater(WaterCompany):
             known_hash=self.MODEL_GRID_HASH,
         )
 
-    def get_history(self) -> None:
+    def set_all_histories(self) -> None:
         """
-        Get the historical data for all active monitors and store it in the history attribute
-        of each monitor in the active_monitors attribute.
+        Sets the historical data for all active monitors and store it in the history attribute of each monitor.
         """
         self._history_timestamp = datetime.datetime.now()
         df = self._get_all_monitors_history_df()
@@ -204,6 +203,7 @@ class ThamesWater(WaterCompany):
                     # ... and it's not a start event!
                     reason = "the last recorded event is not a Start event!"
                     _warn(reason)
+                    continue
                 else:
                     break
 
