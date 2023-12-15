@@ -377,7 +377,7 @@ class Discharge(Event):
 
     def _to_row(self) -> pd.DataFrame:
         """
-        Convert a discharge event to a row in a dataframe
+        Convert a discharge event to a row in a dataframe.
         """
         row = pd.DataFrame(
             {
@@ -386,8 +386,8 @@ class Discharge(Event):
                 "X": self.monitor.x_coord,
                 "Y": self.monitor.y_coord,
                 "ReceivingWaterCourse": self.monitor.receiving_watercourse,
-                "StartTime": self.start_time,
-                "StopTime": self.end_time,
+                "StartDateTime": self.start_time,
+                "StopDateTime": self.end_time,
                 "Duration": self.duration,
                 "OngoingDischarge": self.ongoing,
             },
@@ -663,7 +663,7 @@ class WaterCompany(ABC):
                 if event.event_type == "Discharging":
                     df = pd.concat([df, event._to_row()], ignore_index=True)
 
-        df.sort_values(by="StartTime", inplace=True, ignore_index=True, ascending=False)
+        df.sort_values(by="StartDateTime", inplace=True, ignore_index=True, ascending=False)
         return df
 
     def save_history_json(self, filename: str = None) -> None:
