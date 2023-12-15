@@ -114,7 +114,11 @@ class Monitor:
 
     @property
     def current_event(self) -> "Event":
-        """Return the current event of the monitor."""
+        """Return the current event of the monitor.
+
+        Raises:
+            ValueError: If the current event is not set.
+        """
         if self._current_event is None:
             raise ValueError("Current event is not set.")
         return self._current_event
@@ -127,7 +131,11 @@ class Monitor:
 
     @property
     def history(self) -> List["Event"]:
-        """Return a list of all past events at the monitor."""
+        """Return a list of all past events at the monitor.
+
+        Raises:
+            ValueError: If the history is not yet set. Run get_history() first
+        """
         if self._history is None:
             raise ValueError("History is not yet set. Run get_history() first.")
         return self._history
@@ -141,7 +149,11 @@ class Monitor:
 
     @current_event.setter
     def current_event(self, event: "Event") -> None:
-        """Set the current event of the monitor."""
+        """Set the current event of the monitor.
+
+        Raises:
+            ValueError: If the current event is not ongoing.
+        """
         if not event.ongoing:
             raise ValueError("Current Event must be ongoing.")
         else:
@@ -286,6 +298,12 @@ class Event(ABC):
         self._validate()
 
     def _validate(self):
+        """Validate the attributes of the event.
+
+        Raises:
+            ValueError: If the end time is before the start time.
+            ValueError: If the end time is not None and the event is ongoing.
+        """
         if self._ongoing and self._end_time is not None:
             raise ValueError("End time must be None if the event is ongoing.")
         if self._end_time is not None and self._end_time < self._start_time:
@@ -314,7 +332,11 @@ class Event(ABC):
         """Return the end time of the event."""
         # If the event is Ongoing raise a Warning that the event is ongoing and has no end time but allow program to continue
         if self._ongoing:
-            warnings.warn("Event is ongoing and has no end time. Returning None.")
+            warnings.warn(
+                "\033[91m"
+                + "!WARNING! Event is ongoing and has no end time. Returning None."
+                + "\033[0m"
+            )
         return self._end_time
 
     @property
@@ -329,8 +351,16 @@ class Event(ABC):
 
     # Define a setter for ongoing that only allows setting to False. It then sets the end time to the current time, and calculates the duration.
     @ongoing.setter
-    def ongoing(self, value: bool):
-        """Set the ongoing status of the event."""
+    def ongoing(self, value: bool) -> None:
+        """Set the ongoing status of the event.
+
+        Args:
+            value: The value to set the ongoing status to.
+
+        Raises:
+            ValueError: If the ongoing status is already False.
+            ValueError: If the event is already not ongoing.
+        """
         if value:
             raise ValueError("Ongoing status can only be set to False.")
         # Check if the discharge event is already not ongoing
@@ -568,11 +598,14 @@ class WaterCompany(ABC):
 
     def _calculate_downstream_points(
         self, include_recent_discharges: bool = False
-    ) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
+    ) -> None:
         """
         Calculate the downstream points for all active discharges. Adds a field to the model grid called 'number_upstream_discharges'
         that contains the number of upstream discharges at each node. The optional argument include_recent_discharges allows you to
         include discharges that have occurred in the last 48 hours.
+
+        Args:
+            include_recent_discharges: Whether to include discharges that have occurred in the last 48 hours. Defaults to False.
         """
 
         # Extract all the xy coordinates of active discharges
@@ -618,6 +651,12 @@ class WaterCompany(ABC):
     ) -> FeatureCollection:
         """
         Get a geojson of the downstream points for all active discharges in BNG coordinates.
+
+        Args:
+            include_recent_discharges: Whether to include discharges that have occurred in the last 48 hours. Defaults to False.
+
+        Returns:
+            A geojson FeatureCollection of the downstream points for all active discharges.
         """
         self._calculate_downstream_points(include_recent_discharges)
         print("Building downstream geojson...")
@@ -650,25 +689,37 @@ class WaterCompany(ABC):
     def history_to_discharge_df(self) -> pd.DataFrame:
         """
         Convert a water company's discharge history to a dataframe
+
+        Returns:
+            A dataframe of discharge events.
+
+        Raises:
+            ValueError: If the history is not yet set. Run set_all_histories() first.
+
         """
         if self.history_timestamp is None:
             raise ValueError(
                 "History may not yet be set. Try running set_all_histories() first."
             )
-
+        print("\033[36m" + f"Building output data-table" + "\033[0m")
         df = pd.DataFrame()
         for monitor in self.active_monitors.values():
-            print(f"Processing {monitor.site_name}")
+            print("\033[36m" + f"\tProcessing {monitor.site_name}" + "\033[0m")
             for event in monitor.history:
                 if event.event_type == "Discharging":
                     df = pd.concat([df, event._to_row()], ignore_index=True)
 
-        df.sort_values(by="StartDateTime", inplace=True, ignore_index=True, ascending=False)
+        df.sort_values(
+            by="StartDateTime", inplace=True, ignore_index=True, ascending=False
+        )
         return df
 
     def save_history_json(self, filename: str = None) -> None:
         """
         Save a water company's discharge history to a JSON file
+
+        Args:
+            filename: The filename to save the history to. Defaults to the timestamp of the last update.
         """
         df = self.history_to_discharge_df()
         if filename is None:
@@ -683,6 +734,9 @@ class WaterCompany(ABC):
     def save_history_csv(self, filename: str = None) -> None:
         """
         Save a water company's discharge history to a csv file
+
+        Args:
+            filename: The filename to save the history to. Defaults to the timestamp of the last update.
         """
         df = self.history_to_discharge_df()
         if filename is None:

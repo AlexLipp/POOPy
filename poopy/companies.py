@@ -51,6 +51,7 @@ class ThamesWater(WaterCompany):
             warnings.warn(
                 f"\033[31m\n! WARNING ! The following historical monitors are no longer active: {inactive_names}\nStoring historical data for inactive monitors is not currently supported!\nIf this message has appeared it should be implemented...\033[0m "
             )
+        print("\033[36m" + f"Building history for monitors..." + "\033[0m")
         for name in active_names:
             subset = df[df["LocationName"] == name]
             monitor = self.active_monitors[name]
@@ -172,7 +173,7 @@ class ThamesWater(WaterCompany):
                 f"\033[91m! WARNING ! Alert stream for monitor {monitor.site_name} contains an invalid entry! \nReason: {reason}. Skipping that entry...\033[0m"
             )
 
-        print("\033[36m" + f"Building history for {monitor.site_name}..." + "\033[0m")
+        print("\033[36m" + f"\tBuilding history for {monitor.site_name}..." + "\033[0m")
         history = []
         history.append(monitor.current_event)
         df.reset_index(drop=True, inplace=True)
