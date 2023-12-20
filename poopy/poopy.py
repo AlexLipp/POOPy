@@ -1,22 +1,20 @@
 from abc import ABC, abstractmethod
 import datetime
-import pickle
 import warnings
-from typing import Dict, List, Optional, Tuple, Union
+from typing import Dict, List, Optional, Union
 
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 import pooch
 from geojson import FeatureCollection
-from landlab import RasterModelGrid
-from landlab.components.flow_accum.flow_accum_bw import find_drainage_area_and_discharge
 
 from poopy.aux import (
     geographic_coords_to_model_xy,
     profiler_data_struct_to_geojson,
     save_json,
 )
+from poopy.d8_accumulator import D8Accumulator
 from poopy.profiler import ChannelProfiler
 
 
@@ -454,8 +452,7 @@ class WaterCompany(ABC):
         clientSecret: The client secret for the Water Company API (set by the child class).
         active_monitors: A dictionary of active monitors accessed by site name.
         active_monitor_names: A list of the names of active monitors.
-        model_grid: The model grid that the monitors are located on for routing flow.
-
+        accumulator: The D8 flow accumulator for the region of the water company.
     Methods:
         update: Updates the active_monitors list and the timestamp.
         set_all_histories: Sets the historical data for all active monitors and store it in the history attribute of each monitor.
@@ -479,8 +476,8 @@ class WaterCompany(ABC):
         self._clientSecret = clientSecret
         self._active_monitors: Dict[str, Monitor] = self._fetch_active_monitors()
         self._timestamp: datetime.datetime = datetime.datetime.now()
-        self._model_grid_file_path: str = None
-        self._model_grid: RasterModelGrid = None
+        self._accumulator: D8Accumulator = None
+        self._d8_file_path: str = None
 
     @abstractmethod
     def _fetch_active_monitors(self) -> Dict[str, Monitor]:
@@ -512,9 +509,9 @@ class WaterCompany(ABC):
         """
         pass
 
-    def _fetch_model_grid_file(self, url: str, known_hash: str) -> str:
+    def _fetch_d8_file(self, url: str, known_hash: str) -> str:
         """
-        Get the path to the model grid file. If the file is not present, it will download it from the given url and unzip it.
+        Get the path to the D8 file for the catchment. If the file is not present, it will download it from the given url and unzip it.
         This is all handled by the pooch package. The hash of the file is checked against the known hash to ensure the file is not corrupted.
         If the file is already present in the pooch cache, it will not be downloaded again.
         """
@@ -580,14 +577,11 @@ class WaterCompany(ABC):
         ]
 
     @property
-    def model_grid(self) -> RasterModelGrid:
-        """Return the model grid that the monitors are located on for routing flow."""
-        if self._model_grid is None:
-            print("Loading model grid from memory...")
-            print("...can take a bit of time...")
-            with open(self._model_grid_file_path, "rb") as handle:
-                self._model_grid = pickle.load(handle)
-        return self._model_grid
+    def accumulator(self) -> D8Accumulator:
+        """Return the D8 flow accumulator for the area of the water company."""
+        if self._accumulator is None:
+            self._accumulator = D8Accumulator(self._d8_file_path)
+        return self._accumulator
 
     def update(self):
         """
@@ -596,20 +590,22 @@ class WaterCompany(ABC):
         self._active_monitors = self._fetch_active_monitors()
         self._timestamp = datetime.datetime.now()
 
-    def _calculate_downstream_points(
+    def _calculate_downstream_impact(
         self, include_recent_discharges: bool = False
     ) -> None:
         """
-        Calculate the downstream points for all active discharges. Adds a field to the model grid called 'number_upstream_discharges'
-        that contains the number of upstream discharges at each node. The optional argument include_recent_discharges allows you to
-        include discharges that have occurred in the last 48 hours.
+        Calculate the downstream impact for all active discharges. Stores a 2D numpy array to the WaterCompany called 'num_upstream_discharges'
+        that contains the number of upstream discharges at each point in the flow accumulator. The optional argument include_recent_discharges allows you to
+        include discharges that have occurred in the last 48 hours. Defaults to False.
+
+        This function returns None but stores the result (a 2D numpy array) in the WaterCompany object.
 
         Args:
             include_recent_discharges: Whether to include discharges that have occurred in the last 48 hours. Defaults to False.
         """
 
         # Extract all the xy coordinates of active discharges
-        grid = self.model_grid
+        accumulator = self.accumulator
         # Coords of all active discharges in OSGB
         if not include_recent_discharges:
             discharge_locs = [
@@ -623,28 +619,26 @@ class WaterCompany(ABC):
             ]
         # Convert to model grid coordinates
         locs_model = [
-            geographic_coords_to_model_xy(loc, grid) for loc in discharge_locs
+            geographic_coords_to_model_xy(loc, accumulator.ds) for loc in discharge_locs
         ]
 
-        # Get the model grid node ID for each discharge
-        nodes = [
-            np.ravel_multi_index((y.astype(int), x.astype(int)), grid.shape)
-            for x, y in locs_model
-        ]
+        # Initialize an empty list to store the source nodes
+        nodes = []
+        # Iterate over each pair of coordinates in locs_model
+        for coordinates in locs_model:
+            # Extract x and y from the coordinates and convert them to integers)
+            x = int(coordinates[0])
+            y = int(coordinates[1])
+            # Convert the 2D indices to a 1D index based on the shape of the accumulator array
+            node = np.ravel_multi_index((y, x), accumulator.arr.shape)
+            # Append the node to the list of nodes
+            nodes.append(node)
 
         # Set up the source array for propagating discharges downstream
-        source_array = np.zeros(grid.shape).flatten()
+        source_array = np.zeros(accumulator.arr.shape).flatten()
         source_array[nodes] = 1
-
-        # Propagate the discharges downstream
-        _, number_upstream_sources = find_drainage_area_and_discharge(
-            grid.at_node["flow__upstream_node_order"],
-            r=grid.at_node["flow__receiver_node"],
-            runoff=source_array,
-        )
-        grid.add_field(
-            "number_upstream_discharges", number_upstream_sources, clobber=True
-        )
+        # Propagate the discharges downstream and add the result to the WaterCompany object
+        self._downstream_impact = accumulator.accumulate(source_array)
 
     def get_downstream_geojson(
         self, include_recent_discharges: bool = False
@@ -658,7 +652,7 @@ class WaterCompany(ABC):
         Returns:
             A geojson FeatureCollection of the downstream points for all active discharges.
         """
-        self._calculate_downstream_points(include_recent_discharges)
+        self._calculate_downstream_impact(include_recent_discharges)
         print("Building downstream geojson...")
         print("...can take a bit of time...")
         cp = ChannelProfiler(
