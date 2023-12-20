@@ -1,8 +1,15 @@
 from setuptools import setup, find_packages
+from setuptools.extension import Extension
+from Cython.Build import cythonize
+import numpy
+
+extensions = [Extension("cfuncs", ["poopy/cfuncs.pyx"])]
 
 setup(
     name="poopy",
     version="0.1",
+    ext_modules=cythonize(extensions),
+    include_dirs=[numpy.get_include()],
     packages=find_packages(),
     author="Alex Lipp",
     author_email="alexander.lipp@merton.ox.ac.uk",
