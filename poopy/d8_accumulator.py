@@ -138,20 +138,25 @@ class D8Accumulator:
 
         Parameters
         ----------
-        weights : np.ndarray, optional
+        weights : np.ndarray [ndim = 2], optional
             Array of weights for each node, defaults to giving each node a weight of 1, resulting in a map of the number of upstream nodes.
             If the area of each node is known, this can be used to calculate drainage area. If run-off at each node is known,
             this can be used to calculate discharge.
-        """
 
+        Returns
+        -------
+        np.ndarray [ndim = 2]
+            Array of accumulated weights (or number of upstream nodes if no weights are passed)
+        """
         if weights is None:
             # If no weights are passed, assume all nodes have equal weight of 1.
-            # Output is a 1D array of # upstream nodes
+            # Output is array of # upstream nodes
             weights = np.ones(len(self.receivers))
+        else:
+            if weights.shape != self.arr.shape:
+                raise ValueError("Weights must be have same shape as D8 array")
+            weights = weights.flatten()
 
-        # Check that weights are the right length
-        if len(weights) != len(self.receivers):
-            raise ValueError("Weights must be the same length as the number of nodes")
         return cf.accumulate_flow(self.receivers, self.stack, weights=weights).reshape(
             self._arr.shape
         )

@@ -637,6 +637,7 @@ class WaterCompany(ABC):
         # Set up the source array for propagating discharges downstream
         source_array = np.zeros(accumulator.arr.shape).flatten()
         source_array[nodes] = 1
+        source_array = source_array.reshape(accumulator.arr.shape)
         # Propagate the discharges downstream and add the result to the WaterCompany object
         self._downstream_impact = accumulator.accumulate(source_array)
 
