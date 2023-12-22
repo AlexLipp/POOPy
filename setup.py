@@ -3,7 +3,13 @@ from setuptools.extension import Extension
 from Cython.Build import cythonize
 import numpy
 
-extensions = [Extension("cfuncs", ["poopy/cfuncs.pyx"])]
+extensions = [
+    Extension(
+        "cfuncs",
+        ["poopy/cfuncs.pyx"],
+        language="c++",  # Use C++ compiler
+    )
+]
 
 setup(
     name="poopy",

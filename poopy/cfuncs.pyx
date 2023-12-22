@@ -1,7 +1,10 @@
 """
 This module contains functions for building a topological stack of nodes in a flow direction array.
-For speed and memory efficiency, the functions are written in Cython.
+For speed and memory efficiency, the functions are written in Cython. 
 """
+# distutils: language = c++
+from libcpp.stack cimport stack
+from libcpp.vector cimport vector
 
 import numpy as np
 cimport numpy as np
@@ -127,20 +130,20 @@ def make_donor_array(long[:] r, int[:] delta) -> int[:] :
 
 @cython.boundscheck(False)  # Deactivate bounds checking
 @cython.wraparound(False)   # Deactivate negative indexing.
-def add_to_stack(int l, int j, int[:] s, int[:] delta, int[:] donors) -> int:
+def add_to_ordered_list(int l, int j, int[:] s, int[:] delta, int[:] donors) -> int:
     """
-    Adds node l, and its donors (recursively), to the stack. Used in the recursive
-    build_stack function.
+    Adds node l, and its donors (recursively), to the ordered list of nodes. Used in the recursive
+    build_ordered_list function.
 
     Args:
         l: The node index.
-        j: The stack index.
-        s: The stack.
+        j: The list index.
+        s: The ordered list.
         delta: The index array.
         donors: The donor information array.
 
     Returns:
-        The updated stack index.
+        The updated ordered list index.
     """
     s[j] = l
     j += 1
@@ -148,18 +151,18 @@ def add_to_stack(int l, int j, int[:] s, int[:] delta, int[:] donors) -> int:
     for n in range(delta[l], delta[l + 1]):
         m = donors[n]
         if m != l:
-            j = add_to_stack(m, j, s, delta, donors)
+            j = add_to_ordered_list(m, j, s, delta, donors)
 
     return j
 
 @cython.boundscheck(False)  # Deactivate bounds checking
 @cython.wraparound(False)   # Deactivate negative indexing.
-def build_stack_recursive(long[:] receivers, np.ndarray[long, ndim=1] baselevel_nodes) -> int[:] :
+def build_ordered_list_recursive(long[:] receivers, np.ndarray[long, ndim=1] baselevel_nodes) -> int[:] :
     """
-    Builds the stack of nodes in topological order, given the receiver array.
+    Builds the ordered list of nodes in topological order, given the receiver array.
     Starts at the baselevel nodes and works upstream. This uses recursion 
     and as such is not recommended for large arrays. Included for legacy reasons. 
-    Use build_stack_iterative instead.
+    Use build_ordered_list_iterative instead.
 
     Args:
         receivers: The receiver array (i.e., receiver[i] is the ID
@@ -173,20 +176,21 @@ def build_stack_recursive(long[:] receivers, np.ndarray[long, ndim=1] baselevel_
     cdef int[:] n_donors = count_donors(receivers)
     cdef int[:] delta = ndonors_to_delta(n_donors)
     cdef int[:] donors = make_donor_array(receivers, delta)
-    cdef int[:] stack = np.zeros(n, dtype=np.int32) - 1
+    cdef int[:] ordered_list = np.zeros(n, dtype=np.int32) - 1
     cdef int j = 0
     cdef int b
     for b in baselevel_nodes:
-        j = add_to_stack(b, j, stack, delta, donors)
-    return stack      
+        j = add_to_ordered_list(b, j, ordered_list, delta, donors)
+    return ordered_list      
 
 @cython.boundscheck(False)  # Deactivate bounds checking
 @cython.wraparound(False)   # Deactivate negative indexing.
-def build_stack_iterative(long[:] receivers, np.ndarray[long, ndim=1] baselevel_nodes) -> int[:] :
+def build_ordered_list_iterative(long[:] receivers, np.ndarray[long, ndim=1] baselevel_nodes) -> int[:] :
     """
-    Builds the stack of nodes in topological order, given the receiver array.
+    Builds the ordered list of nodes in topological order, given the receiver array.
     Starts at the baselevel nodes and works upstream in a wave building a 
-    breadth-first search order of the nodes.
+    breadth-first search order of the nodes using a queue. This is much faster
+    than the recursive version. 
 
     Args:
         receivers: The receiver array (i.e., receiver[i] is the ID
@@ -194,13 +198,13 @@ def build_stack_iterative(long[:] receivers, np.ndarray[long, ndim=1] baselevel_
         baselevel_nodes: The baselevel nodes to start from.
 
     Returns:
-        The stack of nodes in topological order (BFS).
+        The nodes in topological order (using a BFS).
     """
     cdef int n = len(receivers)
     cdef int[:] n_donors = count_donors(receivers)
     cdef int[:] delta = ndonors_to_delta(n_donors)
     cdef int[:] donors = make_donor_array(receivers, delta)
-    cdef int[:] stack = np.zeros(n, dtype=np.int32) - 1
+    cdef int[:] ordered_list = np.zeros(n, dtype=np.int32) - 1
     cdef int j = 0 # The index in the stack (i.e., topological order)
     cdef int b, node, m
     # Queue for breadth-first search
@@ -216,7 +220,7 @@ def build_stack_iterative(long[:] receivers, np.ndarray[long, ndim=1] baselevel_
     while front < back:
         node = q[front] # Get the node from the queue
         front += 1 # Increment the front of the queue (i.e., pop the node)
-        stack[j] = node # Add the node to the stack
+        ordered_list[j] = node # Add the node to the stack
         j += 1 # Increment the stack index.
         # Loop through the donors of the node
         for n in range(delta[node], delta[node+1]):
@@ -226,23 +230,23 @@ def build_stack_iterative(long[:] receivers, np.ndarray[long, ndim=1] baselevel_
                 back += 1
 
     free(q)
-    return stack
+    return ordered_list
 
 @cython.boundscheck(False)  # Deactivate bounds checking
 @cython.wraparound(False)   # Deactivate negative indexing.
 def accumulate_flow(
     long[:] receivers, 
-    int[:] stack, 
+    int[:] ordered, 
     np.ndarray[double, ndim=1] weights
 ):
     """
     Accumulates flow along the stack of nodes in topological order, given the receiver array,
-    the ordered stack, and a weights array which contains the contribution from each node.
+    the ordered list of nodes, and a weights array which contains the contribution from each node.
 
     Args:
         receivers: The receiver array (i.e., receiver[i] is the ID
         of the node that receives the flow from the i'th node).
-        stack: The ordered stack of nodes.
+        ordered: The ordered list of nodes.
         weights: The weights array (i.e., the contribution from each node).
     """
     cdef int n = receivers.shape[0]
@@ -252,9 +256,184 @@ def accumulate_flow(
 
     # Accumulate flow along the stack from upstream to downstream
     for i in range(n - 1, -1, -1):
-        donor = stack[i]
+        donor = ordered[i]
         recvr = receivers[donor]
         if donor != recvr:
             accum[recvr] += accum[donor]
 
     return accum
+
+@cython.boundscheck(False)  # Deactivate bounds checking
+@cython.wraparound(False)   # Deactivate negative indexing.
+def get_profile_segments(
+    long[:] starting_nodes,
+    int[:] delta,
+    int[:] donors,
+    double[:] field,
+    float threshold= 0
+):
+    """
+    Returns the channel segments for a D8 network, where each segment is a list of node indices. Only adds nodes to segments if some
+    specified `field` value (e.g., upstream area) is greater or equal than the threshold. Each segment in the list of segments starts
+    at a node and ends at a bifurcation or dead end. Each segment contains first the start node and then all nodes upstream of it
+    in the order they are visited. The segments are ordered topologically, so that the first segment in the list
+    is base-level, and the last segment in the list is an upstream tributary. Base level nodes present an edge case, and as such
+    are always present *twice* in the list of segments. This prevents returning of segments containing *only* a single baselevel nodes.
+    i.e., ensuring that every segment is a valid line (not a point).
+
+    This function uses a stack (first in, first out) to keep track of nodes to visit. It also uses a stack to keep track of segments
+    that are being built. This avoids recursion, which is slow. Its also written in (mostly) pure Cython, which is fast. 
+
+    Args:
+        starting_nodes: array of baselevel nodes that are used to start the segments (Expects these to exceed threshold)
+        delta: array of delta values
+        donors: array of donor nodes
+        field: array of field values
+        threshold: threshold value for field
+
+    Returns:
+        List of segments, where each segment is a list of node indices
+    """
+    # Create a vector of vector ints to store the segments    
+    cdef vector[vector[int]] segments
+    cdef stack[vector[int]] seg_stack # FIFO Stack of segments
+    cdef vector[int] curr_seg # Temporary vector for storing segments
+    cdef stack[int] s  # FIFO Stack of nodes to visit
+    cdef int node # Current node
+    cdef long b # A baselevel node 
+    cdef int n_donors # Number of donors for a node
+    cdef int m # Donor node
+    cdef int n # Donor index
+
+    for b in starting_nodes:
+        s.push(b) # Add the baselevel node to the stack
+        curr_seg.clear() # Clear the current segment vector 
+        curr_seg.push_back(b) # Add the baselevel node to the current segment vector
+        seg_stack.push(curr_seg) # Add the current segment vector to the stack of segments
+    if s.empty():
+        # If there are no valid baselevel nodes, return an empty list
+        return segments
+
+    curr_seg = seg_stack.top()
+    seg_stack.pop()
+    while not s.empty():  
+        node = s.top()
+        s.pop()
+        curr_seg.push_back(node)
+
+        # Loop over donors
+        n_donors = 0
+        for n in range(delta[node], delta[node + 1]):
+            m = donors[n]
+            if m != node:
+                # We don't want to add the node to the queue if it's the same as the current node
+                if field[m] >= threshold:
+                    # Only add the node to the queue if field > threshold.
+                    s.push(m)
+                    n_donors += 1
+        if n_donors == 1:
+            # We're still on the same segment, so we just continue...
+            pass
+        elif n_donors > 1:
+            # We've reached a bifurcation! Add the current segment to the list of segments.
+            segments.push_back(curr_seg)
+            # Now we start a new segment for each donor, and put them in the segments queue.
+            for _ in range(n_donors):
+                curr_seg.clear()
+                curr_seg.push_back(node)
+                seg_stack.push(curr_seg)
+            # Pop the last element of the segment stack and continue from where we left off.
+            curr_seg.clear()
+            curr_seg = seg_stack.top()
+            seg_stack.pop()
+        elif n_donors == 0:
+            # We've reached a dead end! Add the current segment to the list of segments.
+            segments.push_back(curr_seg)
+            if seg_stack.empty():
+                # If the segments queue is empty, we're done!
+                break
+            else:
+                # Otherwise, pop the last element of the segment stack and continue from where we left off.
+                curr_seg.clear()
+                curr_seg = seg_stack.top()
+                seg_stack.pop()
+    return segments
+
+@cython.boundscheck(False)  # Deactivate bounds checking
+@cython.wraparound(False)   # Deactivate negative indexing.
+cpdef (int, int) ItoXY(int i, int ncols):
+    """
+    Converts a node index for a 2D array to an x, y pair of col, row indices.
+
+    Args:
+        i: The node index.
+        ncols: The number of columns in the array.
+
+    Returns:
+        The x, y coordinate pair.
+    """
+    cdef int x = i % ncols
+    cdef int y = i // ncols
+    return x, y
+
+@cython.boundscheck(False)  # Deactivate bounds checking
+@cython.wraparound(False)   # Deactivate negative indexing.
+cpdef vector[float] XYtocoords(int x, int y, float dx, float dy, float ULx, float ULy):
+    """
+    Converts a pair of col, row indices to a pair of geospatial x, y coordinates.
+
+    Args:
+        x: The column index.
+        y: The row index.
+        dx: The cell size in the x direction.
+        dy: The cell size in the y direction (assumed to be negative in keeping with geospatial convention)
+        ULx: The x coordinate of the upper left corner of the array.
+        ULy: The y coordinate of the upper left corner of the array.
+
+    Returns:
+        The x, y coordinate pair.
+    """
+    cdef vector[float] coords
+    cdef float cx = ULx + x * dx
+    cdef float cy = ULy + y * dy
+    coords.push_back(cx)
+    coords.push_back(cy)
+    return coords
+
+@cython.boundscheck(False)  # Deactivate bounds checking
+@cython.wraparound(False)   # Deactivate negative indexing.    
+def id_segments_to_coords_segments(vector[vector[int]] segments, int ncols, float dx, float dy, float ULx, float ULy):
+    """
+    Converts a list of segments to a list of coordinates.
+
+    Args: 
+        ncols: The number of columns in the array.
+        dx: The cell size in the x direction.
+        dy: The cell size in the y direction (assumed to be negative in keeping with geospatial convention)
+        ULx: The x coordinate of the upper left corner of the array.
+        ULy: The y coordinate of the upper left corner of the array.
+
+    Returns:
+        A list of segments, where each segment is a list of coordinates (which are a list of two floats)
+    """
+
+    cdef vector[vector[vector[float]]] coords
+    cdef vector[vector[float]] segment_coords
+    cdef vector[float] coord
+    cdef int x, y
+    cdef int i, j
+    cdef int nsegs = segments.size()
+    cdef int npts
+    cdef int node
+    cdef vector[int] segment
+    for i in range(nsegs):
+        segment = segments[i]
+        npts = segment.size()
+        segment_coords.clear()
+        for j in range(npts):
+            node = segment[j]
+            x, y = ItoXY(node, ncols)
+            coord = XYtocoords(x, y, dx, dy, ULx, ULy)
+            segment_coords.push_back(coord)
+        coords.push_back(segment_coords)
+    return coords

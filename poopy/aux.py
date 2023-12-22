@@ -48,28 +48,6 @@ def ids_to_xyz(
     return (xs, ys, vals)
 
 
-def profiler_data_struct_to_geojson(
-    profiler_data_struct, grid: RasterModelGrid, field: str
-) -> FeatureCollection:
-    """Turns output from ChannelProfiler into a geojson FeatureCollection
-    of LineStrings with property corresponding to chosen field"""
-    features = []
-    for _, segments in profiler_data_struct.items():
-        for _, segment in segments.items():
-            xs, ys, vals = ids_to_xyz(segment["ids"], grid, field)
-            features += [xyz_to_linestring(xs, ys, field, vals[-1])]
-
-    return FeatureCollection(features)
-
-
-def xyz_to_linestring(xs: np.ndarray, ys: np.ndarray, label: str, value: float):
-    """Turns a list of x,y coordinates and a given label, value pair into
-    a geojson LineString feature"""
-    geom = LineString(coordinates=tuple(zip(xs, ys)))
-    prop = {label: value}
-    return Feature(geometry=geom, properties=prop)
-
-
 def save_json(object, filename: str) -> None:
     """Saves a (geo)json object to file"""
     f = open(filename, "w")

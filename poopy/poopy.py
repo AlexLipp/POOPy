@@ -7,15 +7,13 @@ import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 import pooch
-from geojson import FeatureCollection
+from geojson import MultiLineString
 
 from poopy.aux import (
     geographic_coords_to_model_xy,
-    profiler_data_struct_to_geojson,
     save_json,
 )
 from poopy.d8_accumulator import D8Accumulator
-from poopy.profiler import ChannelProfiler
 
 
 class Monitor:
@@ -639,36 +637,30 @@ class WaterCompany(ABC):
         source_array[nodes] = 1
         source_array = source_array.reshape(accumulator.arr.shape)
         # Propagate the discharges downstream and add the result to the WaterCompany object
-        self._downstream_impact = accumulator.accumulate(source_array)
+        return accumulator.accumulate(source_array)
 
     def get_downstream_geojson(
         self, include_recent_discharges: bool = False
-    ) -> FeatureCollection:
+    ) -> MultiLineString:
         """
-        Get a geojson of the downstream points for all active discharges in BNG coordinates.
+        Get a MultiLineString of the downstream points for all active discharges in BNG coordinates.
 
         Args:
             include_recent_discharges: Whether to include discharges that have occurred in the last 48 hours. Defaults to False.
 
         Returns:
-            A geojson FeatureCollection of the downstream points for all active discharges.
+            A geojson MultiLineString of the downstream points for all active (or optionally recent) discharges.
         """
-        self._calculate_downstream_impact(include_recent_discharges)
-        print("Building downstream geojson...")
-        print("...can take a bit of time...")
-        cp = ChannelProfiler(
-            self.model_grid,
-            "number_upstream_discharges",
-            minimum_channel_threshold=0.9,
-            minimum_outlet_threshold=0.9,
+        # Calculate the downstream impact
+        downstream_impact = self._calculate_downstream_impact(
+            include_recent_discharges=include_recent_discharges
         )
-        cp.run_one_step()
-        out_geojson = profiler_data_struct_to_geojson(
-            cp.data_structure, self.model_grid, "number_upstream_discharges"
-        )
-        return out_geojson
+        # Convert the downstream impact to a geojson
+        return self._accumulator.get_profile_segments(downstream_impact, threshold=0.9)
 
-    def save_downstream_geojson(self, filename: str = None) -> None:
+    def save_downstream_geojson(
+        self, filename: str = None, include_recent_discharges: bool = False
+    ) -> None:
         """
         Gets the geojson of the downstream points for all active discharges and saves them to file. Optionally specify a filename.
         """
@@ -679,7 +671,7 @@ class WaterCompany(ABC):
             )
         else:
             file_path = filename
-        save_json(self.get_downstream_geojson(), file_path)
+        save_json(self.get_downstream_geojson(include_recent_discharges), file_path)
 
     def history_to_discharge_df(self) -> pd.DataFrame:
         """
