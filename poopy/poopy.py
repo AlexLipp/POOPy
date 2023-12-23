@@ -1,19 +1,16 @@
-from abc import ABC, abstractmethod
 import datetime
-import os
+import json
 import warnings
-from typing import Dict, List, Optional, Union
+from abc import ABC, abstractmethod
+from typing import Dict, List, Optional, Union, Tuple
 
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 import pooch
 from geojson import MultiLineString
+from osgeo import gdal
 
-from poopy.aux import (
-    geographic_coords_to_model_xy,
-    save_json,
-)
 from poopy.d8_accumulator import D8Accumulator
 
 
@@ -514,10 +511,7 @@ class WaterCompany(ABC):
         This is all handled by the pooch package. The hash of the file is checked against the known hash to ensure the file is not corrupted.
         If the file is already present in the pooch cache, it will not be downloaded again.
         """
-        file_path = pooch.retrieve(
-            url=url,
-            known_hash=known_hash
-        )
+        file_path = pooch.retrieve(url=url, known_hash=known_hash)
 
         return file_path
 
@@ -735,3 +729,24 @@ class WaterCompany(ABC):
             file_path = filename
         print(f"Saving history to \033[92m{file_path}\033[0m")
         df.to_csv(file_path, index=False, header=True)
+
+
+def geographic_coords_to_model_xy(
+    xy_coords: Tuple[float, float], ds: gdal.Dataset
+) -> Tuple[float, float]:
+    """Converts geographical coordinates (from lower left) into model grid
+    x, y indices (i.e., # cells from from upper left)"""
+    trfm = ds.GetGeoTransform()
+    xy_of_upper_left = (
+        trfm[0],
+        trfm[3],
+    )
+    x = (xy_coords[0] - xy_of_upper_left[0]) / trfm[1]
+    y = (xy_coords[1] - xy_of_upper_left[1]) / trfm[5]
+    return x, y
+
+
+def save_json(object, filename: str) -> None:
+    """Saves a (geo)json object to file"""
+    f = open(filename, "w")
+    json.dump(object, f)
