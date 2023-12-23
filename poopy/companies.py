@@ -18,22 +18,17 @@ class ThamesWater(WaterCompany):
     HISTORICAL_API_RESOURCE = "/data/STE/v1/DischargeAlerts"
     API_LIMIT = 1000  # Max num of outputs that can be requested from the API at once
 
-    MODEL_GRID_URL = "https://zenodo.org/record/10280997/files/tw_model_grid.zip"
-    MODEL_GRID_HASH = "md5:5da73b57c3b1587476594601943356e9"
+    # The URL and hash of the D8 raster file on the server
+    D8_FILE_URL = "https://zenodo.org/records/10426423/files/thames_d8.nc?download=1"
+    D8_FILE_HASH = "md5:1047a14906237cd436fd483e87c1647d"
 
     def __init__(self, clientID: str, clientSecret: str):
         print("\033[36m" + "Initialising Thames Water object..." + "\033[0m")
-        print("\033[36m" + "\tFetching model grid..." + "\033[0m")
-        print(
-            "\033[36m"
-            + "\tThis download can be slow if it is the first time you have generated a ThamesWater object. \n\tThe file will be cached so will be faster on subsequent uses..."
-            + "\033[0m"
-        )
         super().__init__(clientID, clientSecret)
         self._name = "ThamesWater"
-        self._model_grid_file_path = self._fetch_model_grid_file(
-            url=self.MODEL_GRID_URL,
-            known_hash=self.MODEL_GRID_HASH,
+        self._d8_file_path = self._fetch_d8_file(
+            url=self.D8_FILE_URL,
+            known_hash=self.D8_FILE_HASH,
         )
 
     def set_all_histories(self) -> None:
