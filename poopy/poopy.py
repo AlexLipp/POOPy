@@ -1,5 +1,6 @@
 from abc import ABC, abstractmethod
 import datetime
+import os
 import warnings
 from typing import Dict, List, Optional, Union
 
@@ -509,16 +510,16 @@ class WaterCompany(ABC):
 
     def _fetch_d8_file(self, url: str, known_hash: str) -> str:
         """
-        Get the path to the D8 file for the catchment. If the file is not present, it will download it from the given url and unzip it.
+        Get the path to the D8 file for the catchment. If the file is not present, it will download it from the given url.
         This is all handled by the pooch package. The hash of the file is checked against the known hash to ensure the file is not corrupted.
         If the file is already present in the pooch cache, it will not be downloaded again.
         """
-        return pooch.retrieve(
-            # URL to one of Pooch's test files
+        file_path = pooch.retrieve(
             url=url,
-            known_hash=known_hash,
-            processor=pooch.Unzip(),
-        )[0]
+            known_hash=known_hash
+        )
+
+        return file_path
 
     # Define the getters for the WaterCompany class
     @property
