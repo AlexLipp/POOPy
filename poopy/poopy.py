@@ -9,6 +9,7 @@ import numpy as np
 import pandas as pd
 import pooch
 from geojson import MultiLineString
+from matplotlib.colors import LogNorm
 from osgeo import gdal
 
 from poopy.d8_accumulator import D8Accumulator
@@ -453,10 +454,7 @@ class WaterCompany(ABC):
         update: Updates the active_monitors list and the timestamp.
         set_all_histories: Sets the historical data for all active monitors and store it in the history attribute of each monitor.
         history_to_discharge_df: Convert a water company's total discharge history to a dataframe
-        save_history_json: Save a water company's discharge history to a JSON file
-        save_history_csv: Save a water company's discharge history to a csv file
         get_downstream_geojson: Get a geojson of the downstream points for all active discharges in BNG coordinates.
-        save_downstream_geojson: Save a geojson (WGS84) of the downstream points for all active discharges. Optionally specify a filename.
     """
 
     def __init__(self, clientID: str, clientSecret: str):
@@ -653,20 +651,57 @@ class WaterCompany(ABC):
         # Convert the downstream impact to a geojson
         return self._accumulator.get_profile_segments(downstream_impact, threshold=0.9)
 
-    def save_downstream_geojson(
-        self, filename: str = None, include_recent_discharges: bool = False
-    ) -> None:
+    def plot_current_status(self) -> None:
         """
-        Gets the geojson of the downstream points for all active discharges and saves them to file. Optionally specify a filename.
+        Plot the current status of the Water Company network.
         """
-        # File path concatantes the name of the water company with the timestamp of the last update
-        if filename is None:
-            file_path = (
-                f"{self.name}_{self.timestamp.strftime('%Y%m%d_%H%M%S')}.geojson"
+
+        plt.figure(figsize=(11, 8))
+        acc = self.accumulator
+        geojson = self.get_downstream_geojson(include_recent_discharges=True)
+        dx, dy = acc.ds.GetGeoTransform()[1], acc.ds.GetGeoTransform()[5]
+        cell_area = dx * dy * -1
+        upstream_area = acc.accumulate(weights=cell_area * np.ones(acc.arr.shape))
+
+        extent = gdal_dataset_to_extent(acc.ds)
+        # Plot the rivers
+        plt.imshow(upstream_area, norm=LogNorm(), extent=extent, cmap="Blues")
+        # Add a hillshade
+        plt.imshow(acc.arr, cmap="Greys_r", alpha=0.2, extent=extent)
+        for line in geojson.coordinates:
+            x = [c[0] for c in line]
+            y = [c[1] for c in line]
+            plt.plot(x, y, color="brown", linewidth=2)
+
+        # Plot the status of the monitors
+        for monitor in self.active_monitors.values():
+            if monitor.current_status == "Discharging":
+                colour = "red"
+                size = 100
+            elif monitor.discharge_in_last_48h:
+                colour = "orange"
+                size = 50
+            elif monitor.current_status == "Not Discharging":
+                colour = "green"
+                size = 10
+            elif monitor.current_status == "Offline":
+                colour = "grey"
+                size = 25
+            plt.scatter(
+                monitor.x_coord,
+                monitor.y_coord,
+                color=colour,
+                s=size,
+                zorder=10,
+                marker="x",
             )
-        else:
-            file_path = filename
-        save_json(self.get_downstream_geojson(include_recent_discharges), file_path)
+        # Set the axis to be equal
+        plt.axis("equal")
+        plt.tight_layout()
+
+        plt.xlabel("Easting (m)")
+        plt.ylabel("Northing (m)")
+        plt.title(self.name + ": " + self.timestamp.strftime("%Y-%m-%d %H:%M"))        
 
     def history_to_discharge_df(self) -> pd.DataFrame:
         """
@@ -696,40 +731,6 @@ class WaterCompany(ABC):
         )
         return df
 
-    def save_history_json(self, filename: str = None) -> None:
-        """
-        Save a water company's discharge history to a JSON file
-
-        Args:
-            filename: The filename to save the history to. Defaults to the timestamp of the last update.
-        """
-        df = self.history_to_discharge_df()
-        if filename is None:
-            file_path = (
-                f"{self.name}_{self.history_timestamp.strftime('%Y%m%d_%H%M%S')}.json"
-            )
-        else:
-            file_path = filename
-        print(f"Saving history to \033[92m{file_path}\033[0m")
-        df.to_json(file_path)
-
-    def save_history_csv(self, filename: str = None) -> None:
-        """
-        Save a water company's discharge history to a csv file
-
-        Args:
-            filename: The filename to save the history to. Defaults to the timestamp of the last update.
-        """
-        df = self.history_to_discharge_df()
-        if filename is None:
-            file_path = (
-                f"{self.name}_{self.history_timestamp.strftime('%Y%m%d_%H%M%S')}.csv"
-            )
-        else:
-            file_path = filename
-        print(f"Saving history to \033[92m{file_path}\033[0m")
-        df.to_csv(file_path, index=False, header=True)
-
 
 def geographic_coords_to_model_xy(
     xy_coords: Tuple[float, float], ds: gdal.Dataset
@@ -746,7 +747,25 @@ def geographic_coords_to_model_xy(
     return x, y
 
 
-def save_json(object, filename: str) -> None:
-    """Saves a (geo)json object to file"""
-    f = open(filename, "w")
-    json.dump(object, f)
+def gdal_dataset_to_extent(dataset: gdal.Dataset) -> Tuple[float, float, float, float]:
+    """Convert a GDAL dataset to an extent tuple. Can be used in matplotlib plotting.
+
+    Args:
+        dataset (gdal.Dataset): The dataset to convert.
+
+    Returns:
+        Tuple[float, float, float, float]: The extent of the dataset.
+    """
+    # get the extent of the grid
+    trsfm = dataset.GetGeoTransform()
+    # get the pixel size
+    dx, dy = trsfm[1], trsfm[5]
+    # get the x and y size of the grid
+    x_size = dataset.RasterXSize
+    y_size = dataset.RasterYSize
+    # calculate the extent of the grid
+    x_min = trsfm[0]
+    x_max = trsfm[0] + (dx * x_size)
+    y_max = trsfm[3]
+    y_min = trsfm[3] + (dy * y_size)
+    return x_min, x_max, y_min, y_max

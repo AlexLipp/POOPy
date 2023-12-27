@@ -27,7 +27,6 @@ setup(
         "pandas",
         "pooch",
         "geojson",
-        "osgeo",
         "gdal",  # osgeo package is usually installed via the GDAL package
         "requests",
     ],
