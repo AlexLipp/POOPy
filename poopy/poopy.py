@@ -455,6 +455,7 @@ class WaterCompany(ABC):
         set_all_histories: Sets the historical data for all active monitors and store it in the history attribute of each monitor.
         history_to_discharge_df: Convert a water company's total discharge history to a dataframe
         get_downstream_geojson: Get a geojson of the downstream points for all active discharges in BNG coordinates.
+        plot_current_status: Plot the current status of the Water Company network showing the downstream impact & monitor statuses.
     """
 
     def __init__(self, clientID: str, clientSecret: str):
