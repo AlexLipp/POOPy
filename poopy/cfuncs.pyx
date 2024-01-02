@@ -265,7 +265,7 @@ def accumulate_flow(
 
 @cython.boundscheck(False)  # Deactivate bounds checking
 @cython.wraparound(False)   # Deactivate negative indexing.
-def get_profile_segments(
+def get_channel_segments(
     long[:] starting_nodes,
     int[:] delta,
     int[:] donors,
@@ -437,3 +437,41 @@ def id_segments_to_coords_segments(vector[vector[int]] segments, int ncols, floa
             segment_coords.push_back(coord)
         coords.push_back(segment_coords)
     return coords
+
+@cython.boundscheck(False)  # Deactivate bounds checking
+@cython.wraparound(False)   # Deactivate negative indexing.    
+def get_profile(long start_node, float dx, float dy, long[:] receivers, long[:] d8):
+    """
+    Gets the profile of a channel segment, given the start node, the receiver array, and the D8 flow direction array. 
+
+    Args:
+        start_node: The node of the array to start the profile from.
+        dx: The cell size in the x direction.
+        dy: The cell size in the y direction.
+        receivers: The array of receivers.
+        d8: The D8 flow direction array. 
+    """
+
+    cdef vector[long] profile 
+    cdef vector[float] distance
+    cdef float downstream_distance = 0
+    downstream_distance = 0  # distance downstream from the start node
+    current_node = start_node
+    receiver = receivers[current_node]
+    while current_node != receiver:
+        profile.push_back(current_node)
+        distance.push_back(downstream_distance)
+        current_node = receivers[current_node]
+        receiver = receivers[current_node]
+        flow_dir = d8[current_node]
+        if flow_dir == 1 or flow_dir == 16:
+            # Flow going left or right
+            downstream_distance += dx
+        elif flow_dir == 4 or flow_dir == 64:
+            # Flow going up or down
+            downstream_distance += dy
+        else:
+            # Flow going diagonally
+            downstream_distance += np.sqrt(dx**2 + dy**2)
+
+    return profile, distance

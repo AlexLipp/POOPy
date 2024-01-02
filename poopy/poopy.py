@@ -1,8 +1,7 @@
 import datetime
-import json
 import warnings
 from abc import ABC, abstractmethod
-from typing import Dict, List, Optional, Union, Tuple
+from typing import Dict, List, Optional, Union
 
 import matplotlib.pyplot as plt
 import numpy as np
@@ -10,7 +9,6 @@ import pandas as pd
 import pooch
 from geojson import MultiLineString
 from matplotlib.colors import LogNorm
-from osgeo import gdal
 
 from poopy.d8_accumulator import D8Accumulator
 
@@ -171,7 +169,11 @@ class Monitor:
         for event in history:
             if event.event_type == "Discharging":
                 if event.ongoing:
-                    total += (datetime.datetime.now() - since).total_seconds() / 60
+                    if event.start_time < since:
+                        # If the start time is before the cut off date, we can take the difference between the current time and the cut off date
+                        total += (datetime.datetime.now() - since).total_seconds() / 60
+                    else:
+                        total += event.duration
                 else:
                     # If the end time is before the cut off date, we can skip this event
                     if event.end_time < since:
@@ -600,35 +602,19 @@ class WaterCompany(ABC):
         accumulator = self.accumulator
         # Coords of all active discharges in OSGB
         if not include_recent_discharges:
-            discharge_locs = [
-                (discharge.x_coord, discharge.y_coord)
+            source_nodes = [
+                accumulator.coord_to_node(discharge.x_coord, discharge.y_coord)
                 for discharge in self.discharging_monitors
             ]
         else:
-            discharge_locs = [
-                (discharge.x_coord, discharge.y_coord)
+            source_nodes = [
+                accumulator.coord_to_node(discharge.x_coord, discharge.y_coord)
                 for discharge in self.recently_discharging_monitors
             ]
-        # Convert to model grid coordinates
-        locs_model = [
-            geographic_coords_to_model_xy(loc, accumulator.ds) for loc in discharge_locs
-        ]
-
-        # Initialize an empty list to store the source nodes
-        nodes = []
-        # Iterate over each pair of coordinates in locs_model
-        for coordinates in locs_model:
-            # Extract x and y from the coordinates and convert them to integers)
-            x = int(coordinates[0])
-            y = int(coordinates[1])
-            # Convert the 2D indices to a 1D index based on the shape of the accumulator array
-            node = np.ravel_multi_index((y, x), accumulator.arr.shape)
-            # Append the node to the list of nodes
-            nodes.append(node)
 
         # Set up the source array for propagating discharges downstream
         source_array = np.zeros(accumulator.arr.shape).flatten()
-        source_array[nodes] = 1
+        source_array[source_nodes] = 1
         source_array = source_array.reshape(accumulator.arr.shape)
         # Propagate the discharges downstream and add the result to the WaterCompany object
         return accumulator.accumulate(source_array)
@@ -650,7 +636,7 @@ class WaterCompany(ABC):
             include_recent_discharges=include_recent_discharges
         )
         # Convert the downstream impact to a geojson
-        return self._accumulator.get_profile_segments(downstream_impact, threshold=0.9)
+        return self._accumulator.get_channel_segments(downstream_impact, threshold=0.9)
 
     def plot_current_status(self) -> None:
         """
@@ -664,11 +650,10 @@ class WaterCompany(ABC):
         cell_area = dx * dy * -1
         upstream_area = acc.accumulate(weights=cell_area * np.ones(acc.arr.shape))
 
-        extent = gdal_dataset_to_extent(acc.ds)
         # Plot the rivers
-        plt.imshow(upstream_area, norm=LogNorm(), extent=extent, cmap="Blues")
+        plt.imshow(upstream_area, norm=LogNorm(), extent=acc.extent, cmap="Blues")
         # Add a hillshade
-        plt.imshow(acc.arr, cmap="Greys_r", alpha=0.2, extent=extent)
+        plt.imshow(acc.arr, cmap="Greys_r", alpha=0.2, extent=acc.extent)
         for line in geojson.coordinates:
             x = [c[0] for c in line]
             y = [c[1] for c in line]
@@ -731,42 +716,3 @@ class WaterCompany(ABC):
             by="StartDateTime", inplace=True, ignore_index=True, ascending=False
         )
         return df
-
-
-def geographic_coords_to_model_xy(
-    xy_coords: Tuple[float, float], ds: gdal.Dataset
-) -> Tuple[float, float]:
-    """Converts geographical coordinates (from lower left) into model grid
-    x, y indices (i.e., # cells from from upper left)"""
-    trfm = ds.GetGeoTransform()
-    xy_of_upper_left = (
-        trfm[0],
-        trfm[3],
-    )
-    x = (xy_coords[0] - xy_of_upper_left[0]) / trfm[1]
-    y = (xy_coords[1] - xy_of_upper_left[1]) / trfm[5]
-    return x, y
-
-
-def gdal_dataset_to_extent(dataset: gdal.Dataset) -> Tuple[float, float, float, float]:
-    """Convert a GDAL dataset to an extent tuple. Can be used in matplotlib plotting.
-
-    Args:
-        dataset (gdal.Dataset): The dataset to convert.
-
-    Returns:
-        Tuple[float, float, float, float]: The extent of the dataset.
-    """
-    # get the extent of the grid
-    trsfm = dataset.GetGeoTransform()
-    # get the pixel size
-    dx, dy = trsfm[1], trsfm[5]
-    # get the x and y size of the grid
-    x_size = dataset.RasterXSize
-    y_size = dataset.RasterYSize
-    # calculate the extent of the grid
-    x_min = trsfm[0]
-    x_max = trsfm[0] + (dx * x_size)
-    y_max = trsfm[3]
-    y_min = trsfm[3] + (dy * y_size)
-    return x_min, x_max, y_min, y_max
