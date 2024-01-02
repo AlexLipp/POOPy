@@ -7,7 +7,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 import pooch
-from geojson import MultiLineString
+from geojson import MultiLineString, Feature, FeatureCollection, Point
 from matplotlib.colors import LogNorm
 
 from poopy.d8_accumulator import D8Accumulator
@@ -457,6 +457,7 @@ class WaterCompany(ABC):
         set_all_histories: Sets the historical data for all active monitors and store it in the history attribute of each monitor.
         history_to_discharge_df: Convert a water company's total discharge history to a dataframe
         get_downstream_geojson: Get a geojson of the downstream points for all active discharges in BNG coordinates.
+        get_downstream_info_geojson: Get a GeoJSON feature collection of the downstream points for all active discharges in BNG coordinates.
         plot_current_status: Plot the current status of the Water Company network showing the downstream impact & monitor statuses.
     """
 
@@ -637,6 +638,70 @@ class WaterCompany(ABC):
         )
         # Convert the downstream impact to a geojson
         return self._accumulator.get_channel_segments(downstream_impact, threshold=0.9)
+
+    def get_downstream_info_geojson(
+        self, include_recent_discharges=False
+    ) -> FeatureCollection:
+        """
+        Get a GeoJSON feature collection of the downstream points for all active discharges in BNG coordinates.
+        Each feature contains as properties: 1) the number of upstream discharges 2) the number of upstream discharges
+        per km2 upstream and 3) a list of the active (or recent) discharging EDMs upstream.
+
+        Args:
+            include_recent_discharges: Whether to include discharges that have occurred in the last 48 hours. Defaults to False.
+
+        Returns:
+            A GeoJSON feature collection of the downstream points for all active (or optionally recent) discharges.
+        """
+        trsfm = self.accumulator.ds.GetGeoTransform()
+        cell_area = (trsfm[1] * trsfm[5] * -1) / 1000000
+        areas = np.ones(self.accumulator.arr.shape) * cell_area
+        drainage_area = self.accumulator.accumulate(areas)
+        impact = self._calculate_downstream_impact(
+            include_recent_discharges=include_recent_discharges
+        )
+        impact_per_area = impact / drainage_area
+        impact = impact.flatten()
+        impact_per_area = impact_per_area.flatten()
+        dstream_nodes = np.where(impact > 0)[0]
+
+        # Create a dictionary of properties for each node
+        dstream_info = {
+            node: {
+                "number_upstream_CSOs": impact[node],
+                "number_CSOs_per_km2": impact_per_area[node],
+                "CSOs": [],
+            }
+            for node in dstream_nodes
+        }
+        if include_recent_discharges:
+            sources = self.recently_discharging_monitors
+        else:
+            sources = self.discharging_monitors
+
+        # Add the sources for each impacted node to the dictionary of properties
+        for monitor in sources:
+            node = self.accumulator.coord_to_node(monitor.x_coord, monitor.y_coord)
+            dstream, _ = self.accumulator.get_profile(node)
+            for node in dstream:
+                dstream_info[node]["CSOs"].append(monitor.site_name)
+
+        # Create a list of coordinates and properties for each impacted node in the network
+        coordinates = []
+        properties = []
+        for node in dstream_nodes:
+            coord = self.accumulator.node_to_coord(node)
+            coordinates.append(coord)
+            properties.append(dstream_info[node])
+
+        # Create a list of GeoJSON features from the coordinates and properties
+        features = [
+            Feature(geometry=Point(coord), properties=prop)
+            for coord, prop in zip(coordinates, properties)
+        ]
+        # Create a GeoJSON feature collection from the list of features
+        feature_collection = FeatureCollection(features)
+        return feature_collection
 
     def plot_current_status(self) -> None:
         """

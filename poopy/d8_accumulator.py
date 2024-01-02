@@ -235,8 +235,13 @@ class D8Accumulator:
         profile, distance = cf.get_profile(
             start_node, dx, dy, self._receivers, self.arr.flatten()
         )
-        dstream_dist = np.asarray(distance)
-        return np.asarray(profile), np.amax(dstream_dist) - dstream_dist
+        # Check length of outputs
+        if len(profile) == 0:
+            warnings.warn("\nProfile is empty. Returning empty arrays")
+            return np.asarray([]), np.asarray([])
+        else:
+            dstream_dist = np.asarray(distance)
+            return np.asarray(profile), np.amax(dstream_dist) - dstream_dist
 
     def node_to_coord(self, node: int) -> Tuple[float, float]:
         """Converts a node index to a coordinate pair"""
