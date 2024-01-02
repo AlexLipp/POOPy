@@ -171,7 +171,7 @@ class Monitor:
         for event in history:
             if event.event_type == "Discharging":
                 if event.ongoing:
-                    total += event.duration
+                    total += (datetime.datetime.now() - since).total_seconds() / 60
                 else:
                     # If the end time is before the cut off date, we can skip this event
                     if event.end_time < since:
@@ -702,7 +702,7 @@ class WaterCompany(ABC):
 
         plt.xlabel("Easting (m)")
         plt.ylabel("Northing (m)")
-        plt.title(self.name + ": " + self.timestamp.strftime("%Y-%m-%d %H:%M"))        
+        plt.title(self.name + ": " + self.timestamp.strftime("%Y-%m-%d %H:%M"))
 
     def history_to_discharge_df(self) -> pd.DataFrame:
         """
