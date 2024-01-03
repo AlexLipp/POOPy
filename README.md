@@ -1,14 +1,15 @@
 # POOPy
 
-**P**oo discharing monitoring with **O**bject **O**riented **Py**thon
+**P**oo discharge monitoring with **O**bject **O**riented **Py**thon
 
 ## Description
 
-This is a Python package for interfacing with Event Duration Monitoring (EDM) devices maintained by English Water Companies.
+This is a Python package for interfacing with Event Duration Monitoring (EDM) devices maintained by English Water Companies. This package was ostensibly developed to provide the back-end for [SewageMap.co.uk](https://github.com/AlexLipp/thames-sewage) but may be generically useful.
 
 ## Installation
 
 Install this package by running the following command (replacing `[LOCAL DIRECTORY]` with the directory you wish to install the package into).
+Note that this requires `Cython` to be installed (for example, `conda install -c anaconda cython`).
 
 ```bash
 git clone https://github.com/AlexLipp/POOPy.git [LOCAL DIRECTORY]
