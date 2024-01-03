@@ -1,7 +1,7 @@
 import datetime
 import warnings
 from abc import ABC, abstractmethod
-from typing import Dict, List, Optional, Union
+from typing import Dict, List, Optional, Union, Tuple
 
 import matplotlib.pyplot as plt
 import numpy as np
@@ -36,6 +36,7 @@ class Monitor:
         total_discharge_last_6_months: Returns the total discharge in minutes in the last 6 months (183 days)
         total_discharge_last_12_months: Returns the total discharge in minutes in the last 12 months (365 days)
         total_discharge_since_start_of_year: Returns the total discharge in minutes since the start of the year
+        event_at: Returns the event that was occurring at the given time for the given monitor.
     """
 
     def __init__(
@@ -127,10 +128,10 @@ class Monitor:
         """Return a list of all past events at the monitor.
 
         Raises:
-            ValueError: If the history is not yet set. Run get_history() first
+            ValueError: If the history is not yet set.
         """
         if self._history is None:
-            raise ValueError("History is not yet set. Run get_history() first.")
+            raise ValueError("History is not yet set!")
         return self._history
 
     @property
@@ -246,6 +247,94 @@ class Monitor:
         )
         plt.tight_layout()
         plt.show()
+
+    def event_at(self, time: datetime.datetime) -> Union[None, "Event"]:
+        """
+        Returns the event that is ongoing at the given time for the given monitor.
+        If no event is found (e.g., the time was before a monitor was installed), it returns None.
+
+        Args:
+            time: The time to check for an event.
+
+        Returns:
+            The event that is ongoing at the given time for the given monitor.
+        """
+        out = None
+        for event in self.history:
+            if event.ongoing and time > event.start_time:
+                # If the event is ongoing and the time is after the start time, then it is the current event
+                out = event
+            elif event.start_time < time and time < event.end_time:
+                # If the event is not ongoing but the time is between the start and end time, then it is the current event
+                out = event
+        return out
+
+    def _history_masks(
+        self, times: List[datetime.datetime]
+    ) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
+        online = np.zeros(len(times), dtype=bool)
+        active = np.zeros(len(times), dtype=bool)
+        recent = np.zeros(len(times), dtype=bool)
+        """
+        Returns three boolean arrays that indicate, respectively, whether the monitor was online, active, 
+        or recently active (within 48 hours) at each time given in the times list. The times list should be
+        regularly spaced in 15 minute intervals. The arrays are returned in the same order as the times list.
+        This is a hidden method that is used by the get_monitor_timeseries() method in the WaterCompany class.
+
+        Args:
+            times: A list of times to check the monitor status at.
+
+        Returns:
+            A tuple of three boolean arrays indicating whether the monitor was online, active, or recently active.  
+        
+        """
+
+        if len(self.history) == 0:
+            print(f"Monitor {self.site_name} has no recorded events")
+            return online, active, recent
+
+        first_event = round_time_down_15(self.history[-1].start_time)
+        # If first event is before the first time in the times list, then we need to fill the online array with 1s
+        if first_event < times[0]:
+            online[:] = True
+        else:
+            online[times.index(first_event) :] = True
+
+        for event in self.history:
+            if event.event_type == "Discharging" or event.event_type == "Offline":
+                start_round = round_time_down_15(event.start_time)
+                if start_round < times[0]:
+                    # Quit loop if start_round is before the first time in the times list
+                    break
+                if event.ongoing:
+                    # If the event is ongoing, then we can set the active array to True from the start_round to the end of
+                    # the array
+                    if event.event_type == "Discharging":
+                        active[times.index(start_round) :] = True
+                        recent[times.index(start_round) :] = True
+                    else:
+                        online[times.index(start_round) :] = False
+                else:
+                    # If the event is not ongoing, then we can set the active array to True from the start_round to the
+                    # end_round
+                    end_round = round_time_up_15(event.end_time)
+                    if event.event_type == "Discharging":
+                        active[times.index(start_round) : times.index(end_round)] = True
+                        # Set recent to True from start_round to 48 hours after end_round
+                        recent_end = end_round + datetime.timedelta(hours=48)
+                        if recent_end > times[-1]:
+                            # If recent_end is after the end of the array, then set recent to True from start_round to the end of the array
+                            recent[times.index(start_round) :] = True
+                        else:
+                            recent[
+                                times.index(start_round) : times.index(recent_end)
+                            ] = True
+                    else:
+                        online[
+                            times.index(start_round) : times.index(end_round)
+                        ] = False
+
+        return online, active, recent
 
 
 class Event(ABC):
@@ -452,6 +541,8 @@ class WaterCompany(ABC):
         active_monitors: A dictionary of active monitors accessed by site name.
         active_monitor_names: A list of the names of active monitors.
         accumulator: The D8 flow accumulator for the region of the water company.
+        discharging_monitors: A list of all monitors that are currently recording a discharge event.
+        recently_discharging_monitors: A list of all monitors that have discharged in the last 48 hours.
     Methods:
         update: Updates the active_monitors list and the timestamp.
         set_all_histories: Sets the historical data for all active monitors and store it in the history attribute of each monitor.
@@ -703,6 +794,49 @@ class WaterCompany(ABC):
         feature_collection = FeatureCollection(features)
         return feature_collection
 
+
+    def get_monitor_timeseries(
+        self, since: datetime.datetime
+    ) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
+        """
+        Returns a pandas DataFrame containing timeseries of the number of CSOs that 1) were active, 2) were active in last
+        48 hours, 3) online at a list of times every 15 minutes since the given datetime. This can be used to plot the
+        number of active CSOs and monitors over time.
+
+        Args:
+            since: The datetime to start the timeseries from.
+        
+        Returns:
+            A pandas DataFrame containing timeseries of the number of CSOs that 1) were active, 2) were active in last
+            48 hours, 3) online at a list of times every 15 minutes since the given datetime.
+        """
+        times = []
+        now = datetime.datetime.now()
+        time = since
+        while time < now:
+            times.append(time)
+            time += datetime.timedelta(minutes=15)
+
+        active = np.zeros(len(times), dtype=int)
+        recent = np.zeros(len(times), dtype=int)
+        online = np.zeros(len(times), dtype=int)
+
+        for monitor in self.active_monitors.values():
+            print(f"Processing {monitor.site_name}")
+            mon_online, mon_active, mon_recent = monitor._history_masks(times)
+            active += mon_active.astype(int)
+            recent += mon_recent.astype(int)
+            online += mon_online.astype(int)
+
+        return pd.DataFrame(
+            {
+                "datetime": times,
+                "number_discharging": active,
+                "number_recently_discharging": recent,
+                "number_online": online,
+            }
+        )
+
     def plot_current_status(self) -> None:
         """
         Plot the current status of the Water Company network.
@@ -781,3 +915,36 @@ class WaterCompany(ABC):
             by="StartDateTime", inplace=True, ignore_index=True, ascending=False
         )
         return df
+
+
+def round_time_down_15(time: datetime.datetime) -> datetime.datetime:
+    """
+    Rounds a datetime down to the nearest 15 minutes.
+    """
+    minutes = time.minute
+    if minutes < 15:
+        minutes = 0
+    elif minutes < 30:
+        minutes = 15
+    elif minutes < 45:
+        minutes = 30
+    else:
+        minutes = 45
+    return datetime.datetime(time.year, time.month, time.day, time.hour, minutes, 0, 0)
+
+
+def round_time_up_15(time: datetime.datetime) -> datetime.datetime:
+    """
+    Rounds a datetime up to the nearest 15 minutes.
+    """
+    minutes = time.minute
+    if minutes < 15:
+        minutes = 15
+    elif minutes < 30:
+        minutes = 30
+    elif minutes < 45:
+        minutes = 45
+    else:
+        minutes = 0
+        time += datetime.timedelta(hours=1)
+    return datetime.datetime(time.year, time.month, time.day, time.hour, minutes, 0, 0)
