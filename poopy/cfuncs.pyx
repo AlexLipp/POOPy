@@ -473,5 +473,7 @@ def get_profile(long start_node, float dx, float dy, long[:] receivers, long[:] 
         else:
             # Flow going diagonally
             downstream_distance += np.sqrt(dx**2 + dy**2)
+    profile.push_back(current_node)
+    distance.push_back(downstream_distance)
 
     return profile, distance
