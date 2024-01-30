@@ -207,46 +207,54 @@ class Monitor:
     def plot_history(self, since: datetime.datetime = None) -> None:
         """Plot the history of events at the monitor. Optionally specify a start date to plot from.
         If no start date is specified, it will plot from the first recorded Discharge or Offline event.
+        If no events are recorded for that monitor, no plot will be returned and a warning will be raised.
         """
-
         events = self.history
-        plt.figure(figsize=(10, 2))
-        for event in events:
-            start = event.start_time
-            if event.ongoing:
-                end = datetime.datetime.now()
-            else:
-                end = event.end_time
-            if event.event_type == "Discharging":
-                color = "#8B4513"
-            if event.event_type == "Offline":
-                color = "grey"
-            if event.event_type == "Not Discharging":
-                continue
+        if len(events) == 0:
+            warnings.warn(
+                "\033[91m"
+                + f"\n!WARNING! Monitor {self.site_name} has no recorded events. Returning None."
+                + "\033[0m"
+            )
 
-            # Create a figure that is wide and not very tall
-            # Plot a polygon for each event that extends from the start to the end of the event
-            # and from y = 0 to y = 1
-            plt.fill_between([start, end], 0, 1, color=color)
-            # Set the title to the name of the monitor
-        # Remove all y axis ticks and labels
-        plt.yticks([])
-        plt.ylabel("")
-        plt.ylim(0, 1)
-        # Set the x axis limits to the start and end of the event list
-        if since is None:
-            minx, maxx = events[-1].start_time, datetime.datetime.now()
         else:
-            minx, maxx = since, datetime.datetime.now()
-        plt.xlim(minx, maxx)
-        total_discharge = self.total_discharge(since=since)
-        plt.title(
-            self.site_name
-            + "\n"
-            + f"Total Discharge: {round(total_discharge,2)} minutes"
-        )
-        plt.tight_layout()
-        plt.show()
+            plt.figure(figsize=(10, 2))
+            for event in events:
+                start = event.start_time
+                if event.ongoing:
+                    end = datetime.datetime.now()
+                else:
+                    end = event.end_time
+                if event.event_type == "Discharging":
+                    color = "#8B4513"
+                if event.event_type == "Offline":
+                    color = "grey"
+                if event.event_type == "Not Discharging":
+                    continue
+
+                # Create a figure that is wide and not very tall
+                # Plot a polygon for each event that extends from the start to the end of the event
+                # and from y = 0 to y = 1
+                plt.fill_between([start, end], 0, 1, color=color)
+                # Set the title to the name of the monitor
+            # Remove all y axis ticks and labels
+            plt.yticks([])
+            plt.ylabel("")
+            plt.ylim(0, 1)
+            # Set the x axis limits to the start and end of the event list
+            if since is None:
+                minx, maxx = events[-1].start_time, datetime.datetime.now()
+            else:
+                minx, maxx = since, datetime.datetime.now()
+            plt.xlim(minx, maxx)
+            total_discharge = self.total_discharge(since=since)
+            plt.title(
+                self.site_name
+                + "\n"
+                + f"Total Discharge: {round(total_discharge,2)} minutes"
+            )
+            plt.tight_layout()
+            plt.show()
 
     def event_at(self, time: datetime.datetime) -> Union[None, "Event"]:
         """
@@ -794,18 +802,20 @@ class WaterCompany(ABC):
         feature_collection = FeatureCollection(features)
         return feature_collection
 
-
     def get_monitor_timeseries(
         self, since: datetime.datetime
     ) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
         """
         Returns a pandas DataFrame containing timeseries of the number of CSOs that 1) were active, 2) were active in last
         48 hours, 3) online at a list of times every 15 minutes since the given datetime. This can be used to plot the
-        number of active CSOs and monitors over time.
+        number of active CSOs and monitors over time. NB that for "online" we conservatively assume that every monitor was
+        _offline_ until we receive any positive event from it. This means that if a monitor is installed but recording
+        'notdischarging' for a month until its first discharge event, it will be counted as offline for that month. Lacking
+        any other information, this is the most conservative assumption we can make.
 
         Args:
             since: The datetime to start the timeseries from.
-        
+
         Returns:
             A pandas DataFrame containing timeseries of the number of CSOs that 1) were active, 2) were active in last
             48 hours, 3) online at a list of times every 15 minutes since the given datetime.
