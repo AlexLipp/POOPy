@@ -2,3 +2,4 @@ __pycache__/
 build/
 poopy.egg-info/
 poopy/__pycache__
+poopy/*.cpp
