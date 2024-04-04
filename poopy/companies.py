@@ -110,7 +110,11 @@ class ThamesWater(WaterCompany):
             "operand_1": "eq",
             "value_1": monitor.site_name,
         }
-        df = self._handle_history_api_response(url=url, params=params)
+        df = self._handle_current_api_response(url=url, params=params)
+        # Note, we use handle_current_api_response here because we want to try and fetch all records not just those up to a certain date. This 
+        # is because individual monitors don't have the same "start" date and so the historical fetching criterion varies. However, this is 
+        # not ideal because it means that if the API erroneously returns an empty dataframe in place of an error message, then the function will
+        # return an empty dataframe. This is the fault of the API, not this code but it is something to be aware of, and needs to be fixed.
         return df
 
     def _handle_current_api_response(self, url: str, params: str) -> pd.DataFrame:
@@ -202,7 +206,7 @@ class ThamesWater(WaterCompany):
                         + "\n\t"
                         + "-" * 80
                         + "\n\tThis error is *probably* caused by the API erroneously returning an empty response in place of an error..."
-                        "\n\t...but it could also be caused by the API genuinely returning no records."
+                        + "\n\t...but it could also be caused by the API genuinely returning no records."
                         + "\n\tThis might occur if there have been *exactly* an integer multiple of the API limit number of events (e.g., 0, 1000, 2000 etc.)."
                         + "\n\tAt present there is no way to distinguish between these two cases (which is the fault of the API, not this code)."
                         + "\n\tIf you think this is the case, try using the _handle_current_api_response function instead or modifying HISTORY_VALID_UNTIL."
