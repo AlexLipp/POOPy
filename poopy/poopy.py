@@ -10,7 +10,7 @@ import pooch
 from geojson import MultiLineString, Feature, FeatureCollection, Point
 from matplotlib.colors import LogNorm
 
-from poopy.d8_accumulator import D8Accumulator
+#from poopy.d8_accumulator import D8Accumulator
 
 
 class Monitor:
@@ -670,12 +670,12 @@ class WaterCompany(ABC):
             if monitor.discharge_in_last_48h
         ]
 
-    @property
-    def accumulator(self) -> D8Accumulator:
-        """Return the D8 flow accumulator for the area of the water company."""
-        if self._accumulator is None:
-            self._accumulator = D8Accumulator(self._d8_file_path)
-        return self._accumulator
+    #@property
+    #def accumulator(self) -> D8Accumulator:
+    #    """Return the D8 flow accumulator for the area of the water company."""
+    #    if self._accumulator is None:
+    #        self._accumulator = D8Accumulator(self._d8_file_path)
+    #    return self._accumulator
 
     def update(self):
         """

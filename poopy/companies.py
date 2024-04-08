@@ -22,7 +22,7 @@ class ThamesWater(WaterCompany):
     HISTORY_VALID_UNTIL = datetime.datetime(2022, 4, 1, 0, 30, 0)
     # This is the date until by which the EDM monitors had been attached to the API and so the
     # point at which the record becomes valid. Note however that most records we actually
-    # not attached until 1/1/2023, so its not sensible to compare records before this date.  
+    # not attached until 1/1/2023, so its not sensible to compare records before this date.
 
     # A large number of monitors have exactly 1st April 2022 as their first record, 
     # and a long period of offline that follows.
@@ -168,7 +168,7 @@ class ThamesWater(WaterCompany):
         API erroneously returns an empty dataframe in place of an error message. Note that there is one case where this function
         will behave unexpectedly: if the number of records returned is exactly an integer multiple of the API limit number of events
         (e.g., 0, 1000, 2000 etc.), then the function will return an empty dataframe. This is because the function cannot distinguish
-        between this case and the case where the API genuinely returns no records. This is the fault of the API, not this code but 
+        between this case and the case where the API genuinely returns no records. This is the fault of the API, not this code but
         it is something to be aware of, and needs to be fixed.
 
         See also the `handle_current_api_response` function.
@@ -434,3 +434,85 @@ class ThamesWater(WaterCompany):
                 + row["LocationName"]
             )
         return event
+
+
+class WelshWater(WaterCompany):
+    """
+    Creates an object to interact with the WelshWater EDM API. No clientID or clientSecret required currently.
+    """
+
+    API_ROOT = "https://services3.arcgis.com/KLNF7YxtENPLYVey/arcgis/rest/services"
+    CURRENT_API_RESOURCE = "/Spill_Prod/FeatureServer/0/query?where=1=1&outFields=*&f=json"
+    HISTORICAL_API_RESOURCE = ""
+    API_LIMIT = 2000  # Max num of outputs that can be requested from the API at once
+
+    def __init__(self):
+        print("\033[36m" + "Initialising Welsh Water object..." + "\033[0m")
+        super().__init__()
+        self._name = "WelshWater"
+
+    def _get_current_status_df(self) -> pd.DataFrame:
+        """
+        Get the current status of the monitors by calling the API.
+        """
+        print(
+            "\033[36m"
+            + "Requesting current status data from Welsh Water API..."
+            + "\033[0m"
+        )
+        url = self.API_ROOT + self.CURRENT_API_RESOURCE
+
+        params = {
+            "resultRecordCount": self.API_LIMIT, 
+            "resultOffset": ""
+        }
+        df = self._handle_current_api_response(url=url, params=params)
+
+        return df
+
+    def _handle_current_api_response(self, url: str, params: str) -> pd.DataFrame:
+        """
+        Creates and handles the response from the API. If the response is valid, return a dataframe of the response.
+        Otherwise, raise an exception. This is a helper function for the `_get_current_status_df` and `_get_monitor_history_df` (not implemented) functions.
+        Loops through the API calls until all the records are fetched.
+        """
+        df = pd.DataFrame()
+        while True:
+            r = requests.get(
+                url,
+                params=params,
+            )
+
+            print("\033[36m" + "\tRequesting from " + r.url + "\033[0m")
+            # check response status and use only valid requests
+            if r.status_code == 200:
+                response = r.json()
+                # If no items are returned, return an empty dataframe
+                if "items" not in response:
+                    print("\033[36m" + "\tNo more records to fetch" + "\033[0m")
+                    break
+                else:
+                    df_temp = pd.json_normalize(response["items"])
+            else:
+                raise Exception(
+                    "\tRequest failed with status code {0}, and error message: {1}".format(
+                        r.status_code, r.json()
+                    )
+                )
+            df = pd.concat([df, df_temp])
+            params["offset"] += params["limit"]  # Increment offset for the next request
+        df.reset_index(drop=True, inplace=True)
+        return df
+
+    def _fetch_active_monitors(self) -> Dict[str, Monitor]:
+        """
+        Returns a dictionary of Monitor objects representing the active monitors.
+        """
+        df = self._get_current_status_df()
+        monitors = {}
+        for _, row in df.iterrows():
+            monitor = self._row_to_monitor(row=row)
+            event = self._row_to_event(row=row, monitor=monitor)
+            monitor.current_event = event
+            monitors[monitor.site_name] = monitor
+        return monitors
