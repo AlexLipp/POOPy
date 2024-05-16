@@ -18,10 +18,14 @@ class ThamesWater(WaterCompany):
     HISTORICAL_API_RESOURCE = "/data/STE/v1/DischargeAlerts"
     API_LIMIT = 1000  # Max num of outputs that can be requested from the API at once
 
-    HISTORY_VALID_UNTIL = datetime.datetime(2022, 5, 1)  # 1st May 2023
+    # Set history valid until to be half past midnight on the 1st April 2022
+    HISTORY_VALID_UNTIL = datetime.datetime(2022, 4, 1, 0, 30, 0)
     # This is the date until by which the EDM monitors had been attached to the API and so the
     # point at which the record becomes valid. Note however that most records we actually
     # not attached until 1/1/2023, so its not sensible to compare records before this date.  
+
+    # A large number of monitors have exactly 1st April 2022 as their first record, 
+    # and a long period of offline that follows.
 
     # The URL and hash of the D8 raster file on the server
     D8_FILE_URL = "https://zenodo.org/records/10426423/files/thames_d8.nc?download=1"
@@ -223,18 +227,23 @@ class ThamesWater(WaterCompany):
                     if last_record_datetime < self.HISTORY_VALID_UNTIL:
                         print(
                             "\033[36m"
-                            + "\tFound record with datetime {0} before `valid until' date {1}. Stopping.".format(
+                            + "\tFound a record with datetime {0} before `valid until' date {1}.".format(
                                 last_record_datetime, self.HISTORY_VALID_UNTIL
                             )
                             + "\033[0m"
                         )
-                        # Now delete all records in df_temp before the `valid until' date
-                        df_temp["DateTime"] = pd.to_datetime(df_temp["DateTime"])
-                        df_temp = df_temp[
-                            df_temp["DateTime"] >= self.HISTORY_VALID_UNTIL
-                        ]
-                        df = pd.concat([df, df_temp])
-                        break
+
+                        # Check the number of rows and compare to the API limit
+                        if df_temp.shape[0] < self.API_LIMIT:
+                            # If the number of records is less than the API limit, then we have fetched all records
+                            print("\033[36m" + "\tLast request contained {0} many records, fewer than the API limit of {1}.".format(df_temp.shape[0], self.API_LIMIT) + "\033[0m")
+                            print("\033[36m" + "\tNo more records to fetch!" + "\033[0m")
+                            df = pd.concat([df, df_temp])
+                            break 
+                        else:
+                            # If the number of records is equal to the API limit, possibly more records to fetch so we continue.
+                            print("\033[36m" + "\tLast request contained {0} many records, equal to the API limit of {1}.".format(df_temp.shape[0], self.API_LIMIT) + "\033[0m")
+                            print("\033[36m" + "\tChecking if there are more records to fetch..." + "\033[0m")
             else:
                 raise Exception(
                     "\tRequest failed with status code {0}, and error message: {1}".format(
