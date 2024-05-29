@@ -10,7 +10,7 @@ import pooch
 from geojson import MultiLineString, Feature, FeatureCollection, Point
 from matplotlib.colors import LogNorm
 
-#from poopy.d8_accumulator import D8Accumulator
+from poopy.d8_accumulator import D8Accumulator
 
 
 class Monitor:
@@ -406,10 +406,13 @@ class Event(ABC):
     @property
     def duration(self) -> float:
         """Return the duration of the event in minutes."""
-        if not self.ongoing:
-            return (self._end_time - self._start_time).total_seconds() / 60
+        if self._start_time is not None:
+            if not self.ongoing:
+                return (self._end_time - self._start_time).total_seconds() / 60
+            else:
+                return (datetime.datetime.now() - self._start_time).total_seconds() / 60
         else:
-            return (datetime.datetime.now() - self._start_time).total_seconds() / 60
+            return 0
 
     @property
     def ongoing(self) -> bool:
@@ -417,7 +420,7 @@ class Event(ABC):
         return self._ongoing
 
     @property
-    def start_time(self) -> datetime.datetime:
+    def start_time(self) -> Optional[datetime.datetime]:
         """Return the start time of the event."""
         return self._start_time
 
@@ -670,12 +673,12 @@ class WaterCompany(ABC):
             if monitor.discharge_in_last_48h
         ]
 
-    #@property
-    #def accumulator(self) -> D8Accumulator:
-    #    """Return the D8 flow accumulator for the area of the water company."""
-    #    if self._accumulator is None:
-    #        self._accumulator = D8Accumulator(self._d8_file_path)
-    #    return self._accumulator
+    @property
+    def accumulator(self) -> D8Accumulator:
+        """Return the D8 flow accumulator for the area of the water company."""
+        if self._accumulator is None:
+            self._accumulator = D8Accumulator(self._d8_file_path)
+        return self._accumulator
 
     def update(self):
         """
