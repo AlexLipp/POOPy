@@ -438,7 +438,9 @@ class ThamesWater(WaterCompany):
 
 class WelshWater(WaterCompany):
     """
-    Creates an object to interact with the WelshWater EDM API. No clientID or clientSecret required currently.
+    Creates an object to interact with the WelshWater EDM API. 
+    There is no auth on this endpoint required currently.
+    There is only a current status endpoint, no historical endpoint available.
     """
 
     API_ROOT = "https://services3.arcgis.com/KLNF7YxtENPLYVey/arcgis/rest/services"
@@ -473,7 +475,7 @@ class WelshWater(WaterCompany):
     def _handle_current_api_response(self, url: str, params: str) -> pd.DataFrame:
         """
         Creates and handles the response from the API. If the response is valid, return a dataframe of the response.
-        Otherwise, raise an exception. This is a helper function for the `_get_current_status_df` and `_get_monitor_history_df` (not implemented) functions.
+        Otherwise, raise an exception. This is a helper function for the `_get_current_status_df` (and `_get_monitor_history_df` not implemented for WW) functions.
         Loops through the API calls until all the records are fetched.
         """
         df = pd.DataFrame()
@@ -521,10 +523,16 @@ class WelshWater(WaterCompany):
         return monitors
 
     def _get_monitor_history(self, monitor: Monitor) -> List[Event]:
+        """
+        Not available for WW API.
+        """
         pass
         return 
 
     def set_all_histories(self) -> None:
+        """
+        Not available for WW API.
+        """
         pass
         return
 
