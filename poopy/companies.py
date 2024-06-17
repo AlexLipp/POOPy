@@ -97,9 +97,10 @@ class ThamesWater(WaterCompany):
         df.reset_index(drop=True, inplace=True)
         return df
 
-    def _get_monitor_events_df(self, monitor: Monitor) -> pd.DataFrame:
+    def _get_monitor_events_df(self, monitor: Monitor, verbose: bool = False) -> pd.DataFrame:
         """
-        Get the historical status of a particular monitor by calling the API.
+        Get the historical status of a particular monitor by calling the API. 
+        If verbose is set to True, the function will print the dataframe of the full API response to the console.
         """
         print(
             "\033[36m"
@@ -114,18 +115,19 @@ class ThamesWater(WaterCompany):
             "operand_1": "eq",
             "value_1": monitor.site_name,
         }
-        df = self._handle_current_api_response(url=url, params=params)
+        df = self._handle_current_api_response(url=url, params=params, verbose=verbose)
         # Note, we use handle_current_api_response here because we want to try and fetch all records not just those up to a certain date. This 
         # is because individual monitors don't have the same "start" date and so the historical fetching criterion varies. However, this is 
         # not ideal because it means that if the API erroneously returns an empty dataframe in place of an error message, then the function will
         # return an empty dataframe. This is the fault of the API, not this code but it is something to be aware of, and needs to be fixed.
         return df
 
-    def _handle_current_api_response(self, url: str, params: str) -> pd.DataFrame:
+    def _handle_current_api_response(self, url: str, params: str, verbose: bool = False) -> pd.DataFrame:
         """
         Creates and handles the response from the API. If the response is valid, return a dataframe of the response.
         Otherwise, raise an exception. This is a helper function for the `_get_current_status_df` and `_get_monitor_history_df` functions.
-        Loops through the API calls until all the records are fetched.
+        Loops through the API calls until all the records are fetched. If verbose is set to True, the function will print the full dataframe 
+        to the console.
         """
         df = pd.DataFrame()
         while True:
@@ -157,6 +159,13 @@ class ThamesWater(WaterCompany):
             df = pd.concat([df, df_temp])
             params["offset"] += params["limit"]  # Increment offset for the next request
         df.reset_index(drop=True, inplace=True)
+
+        # Print the full dataframe to the console if verbose is set to True
+        if verbose:
+            print("\033[36m" + "\tPrinting full API response..." + "\033[0m")
+            with pd.option_context('display.max_rows', None, 'display.max_columns', None):  # more options can be specified also
+                print(df)
+
         return df
 
     def _handle_history_api_response(self, url: str, params: str) -> pd.DataFrame:
@@ -372,21 +381,23 @@ class ThamesWater(WaterCompany):
                         history.append(event)
         return history
 
-    def _get_monitor_history(self, monitor: Monitor) -> List[Event]:
+    def _get_monitor_history(self, monitor: Monitor, verbose: bool = False) -> List[Event]:
         """
         Creates a list of historical Event objects from the alert stream for a given monitor.
         This is done by iterating through the alert stream and creating an Event object for each
         start/stop event pair. If the alert stream is invalid, a warning is raised and the entry is skipped.
-        If the alert stream is empty, an empty list is returned.
+        If the alert stream is empty, an empty list is returned. Optionally prints the full dataframe 
+        of the API response to the console if verbose is set to True.
 
         Args:
             monitor (Monitor): The monitor for which to create the history
+            verbose (bool): If True, the function will print the full dataframe of the API response to the console
 
         Returns:
             List[Event]: A list of Event objects representing the historical events for the monitor
         """
         # Get the historical data for the monitor from the API
-        events_df = self._get_monitor_events_df(monitor)
+        events_df = self._get_monitor_events_df(monitor, verbose=verbose)
         return self._events_df_to_events_list(df=events_df, monitor=monitor)
 
     def _row_to_monitor(self, row: pd.DataFrame) -> Monitor:

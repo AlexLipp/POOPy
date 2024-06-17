@@ -117,11 +117,14 @@ class Monitor:
             raise ValueError("Current event is not set.")
         return self._current_event
 
-    def get_history(self) -> None:
+    def get_history(self, verbose: bool = False) -> None:
         """
         Get the historical data for the monitor and store it in the history attribute.
+
+        Args:
+            verbose: Whether to print the dataframe of API responses when the history is set. Defaults to False.
         """
-        self._history = self.water_company._get_monitor_history(self)
+        self._history = self.water_company._get_monitor_history(self, verbose=verbose)
 
     @property
     def history(self) -> List["Event"]:
@@ -338,9 +341,9 @@ class Monitor:
                                 times.index(start_round) : times.index(recent_end)
                             ] = True
                     else:
-                        online[
-                            times.index(start_round) : times.index(end_round)
-                        ] = False
+                        online[times.index(start_round) : times.index(end_round)] = (
+                            False
+                        )
 
         return online, active, recent
 
