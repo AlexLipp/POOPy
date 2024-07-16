@@ -634,7 +634,7 @@ class WaterCompany(ABC):
         get_downstream_geojson: Get a geojson of the downstream points for all active discharges in BNG coordinates.
         get_downstream_info_geojson: Get a GeoJSON feature collection of the downstream points for all active discharges in BNG coordinates.
         plot_current_status: Plot the current status of the Water Company network showing the downstream impact & monitor statuses.
-        get_downstream_impact_at: Calculates the downstream extent of all monitors that were discharging (or, optionally, recently discharging) at a given time.
+        get_historical_downstream_impact_at: Calculates the downstream extent of all monitors that were discharging (or, optionally, recently discharging) at a given time.
     """
 
     def __init__(self, clientID: str, clientSecret: str):
@@ -788,7 +788,7 @@ class WaterCompany(ABC):
         # Propagate the discharges downstream and add the result to the WaterCompany object
         return accumulator.accumulate(source_array)
 
-    def get_downstream_impact_at(self, time: datetime.datetime, include_recent_discharges: bool = False) -> np.ndarray:
+    def get_historical_downstream_impact_at(self, time: datetime.datetime, include_recent_discharges: bool = False) -> np.ndarray:
         """
         Calculates the downstream impact of all monitors that were discharging (or, optionally, recently discharging)
         at the given time.
@@ -826,7 +826,8 @@ class WaterCompany(ABC):
         self, include_recent_discharges: bool = False
     ) -> MultiLineString:
         """
-        Get a MultiLineString of the downstream points for all active discharges in BNG coordinates.
+        Get a MultiLineString of the downstream points for all active discharges in BNG coordinates. Note that this 
+        specific function is largely retained for legacy purposes
 
         Args:
             include_recent_discharges: Whether to include discharges that have occurred in the last 48 hours. Defaults to False.
