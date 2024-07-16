@@ -631,10 +631,11 @@ class WaterCompany(ABC):
         update: Updates the active_monitors list and the timestamp.
         set_all_histories: Sets the historical data for all active monitors and store it in the history attribute of each monitor.
         history_to_discharge_df: Convert a water company's total discharge history to a dataframe
-        get_downstream_geojson: Get a geojson of the downstream points for all active discharges in BNG coordinates.
-        get_downstream_info_geojson: Get a GeoJSON feature collection of the downstream points for all active discharges in BNG coordinates.
+        get_downstream_geojson: Get a geojson of the downstream points for all current discharges in BNG coordinates.
+        get_downstream_info_geojson: Get a GeoJSON feature collection of more detailed information at the downstream points for current discharges.
+        get_historical_downstream_info_geojson: Get a GeoJSON feature collection of more detailed information at the downstream points for discharges *AT A GIVEN HISTORICAL TIME*.
         plot_current_status: Plot the current status of the Water Company network showing the downstream impact & monitor statuses.
-        get_historical_downstream_impact_at: Calculates the downstream extent of all monitors that were discharging (or, optionally, recently discharging) at a given time.
+        get_historical_downstream_impact_at: Calculates the downstream extent of all monitors that were discharging (or, optionally, recently discharging) at a given time *AT A GIVEN HISTORICAL TIME*.
     """
 
     def __init__(self, clientID: str, clientSecret: str):
@@ -799,26 +800,9 @@ class WaterCompany(ABC):
         
         Returns:
             A 2D numpy array of the domain area showing the number of active/recently active discharges at the given time.
-
-        Raises:
-            ValueError: If the target time is in the future.
         """
-        # Raise a value error if the target time is in the future
-        if time > datetime.datetime.now():
-            raise ValueError("The target time cannot be in the future.")
-
         # Create the list of the source monitors that were discharging/recently discharging at the specified time
-        sources = []
-        if include_recent_discharges:
-            for monitor in self.active_monitors.values():
-                if monitor.recent_discharge_at(time):
-                    sources.append(monitor)
-        else:
-            for monitor in self.active_monitors.values():
-                event = monitor.event_at(time)
-                if event is not None and event.event_type == "Discharging":
-                    sources.append(monitor)
-
+        sources = self._get_sources_at(time, include_recent_discharges)
         # Return the impact array
         return self._calculate_downstream_impact(sources)
 
@@ -844,33 +828,33 @@ class WaterCompany(ABC):
         # Convert the downstream impact to a geojson
         return self._accumulator.get_channel_segments(downstream_impact, threshold=0.9)
 
-    def get_downstream_info_geojson(
-        self, include_recent_discharges=False
-    ) -> FeatureCollection:
+    def _calculate_downstream_info(self, sources: List[Monitor]) -> FeatureCollection:
         """
-        Get a GeoJSON feature collection of the downstream points for all active discharges in BNG coordinates.
-        Each feature contains as properties: 1) the number of upstream discharges 2) the number of upstream discharges
-        per km2 upstream and 3) a list of the active (or recent) discharging EDMs upstream.
+        Calculate the downstream impact of a list of source monitors and return a GeoJSON FeatureCollection of the downstream points. 
+        Contains information on number of upstream sources, the list of CSOs and the number of CSOs per km2.
 
         Args:
-            include_recent_discharges: Whether to include discharges that have occurred in the last 48 hours. Defaults to False.
+            sources: A list of source monitors for which to calculate the downstream impact.
 
         Returns:
-            A GeoJSON feature collection of the downstream points for all active (or optionally recent) discharges.
+            A GeoJSON FeatureCollection of the downstream points for all active discharges.
         """
+        # Calculate downstream impact
+        impact = self._calculate_downstream_impact(source_monitors=sources)
+
+        # Calculate the upstream area
         trsfm = self.accumulator.ds.GetGeoTransform()
         cell_area = (trsfm[1] * trsfm[5] * -1) / 1000000
         areas = np.ones(self.accumulator.arr.shape) * cell_area
         drainage_area = self.accumulator.accumulate(areas)
-        impact = self._calculate_downstream_impact(
-            include_recent_discharges=include_recent_discharges
-        )
+
+        # Calculate relative importance of each area
         impact_per_area = impact / drainage_area
         impact = impact.flatten()
         impact_per_area = impact_per_area.flatten()
         dstream_nodes = np.where(impact > 0)[0]
 
-        # Create a dictionary of properties for each node
+        # Create a dictionary of properties for each downstream node
         dstream_info = {
             node: {
                 "number_upstream_CSOs": impact[node],
@@ -879,10 +863,6 @@ class WaterCompany(ABC):
             }
             for node in dstream_nodes
         }
-        if include_recent_discharges:
-            sources = self.recently_discharging_monitors
-        else:
-            sources = self.discharging_monitors
 
         # Add the sources for each impacted node to the dictionary of properties
         for monitor in sources:
@@ -907,6 +887,75 @@ class WaterCompany(ABC):
         # Create a GeoJSON feature collection from the list of features
         feature_collection = FeatureCollection(features)
         return feature_collection
+
+    def _get_sources_at(
+        self, time: datetime.datetime, include_recent_discharges: bool
+    ) -> List[Monitor]:
+        """
+        Get the sources that were discharging (or, optionally, recently discharging) at the given time.
+
+        Args:
+            time: The time to check for discharges.
+            include_recent_discharges: Whether to include discharges that have occurred in the last 48 hours. Defaults to False.
+
+        Returns:
+            A list of monitors that were discharging (or, optionally, recently discharging) at the given time.
+        
+        Raises:
+            ValueError: If the target time is in the future.
+        """
+
+        if time > datetime.datetime.now():
+            raise ValueError("The target time cannot be in the future.")
+        sources = []
+        if include_recent_discharges:
+            for monitor in self.active_monitors.values():
+                if monitor.recent_discharge_at(time):
+                    sources.append(monitor)
+        else:
+            for monitor in self.active_monitors.values():
+                event = monitor.event_at(time)
+                if event is not None and event.event_type == "Discharging":
+                    sources.append(monitor)
+        return sources
+
+    def get_downstream_info_geojson(
+        self, include_recent_discharges=False
+    ) -> FeatureCollection:
+        """
+        Get a GeoJSON feature collection of the downstream points for all CURRENT active discharges in BNG coordinates. 
+        Contains information on number of upstream sources, the list of CSOs and the number of CSOs per km2. 
+
+        Args: 
+            include_recent_discharges: Whether to include discharges that have occurred in the last 48 hours. Defaults to False.
+        
+        Returns:
+            A GeoJSON FeatureCollection of the downstream points for all active discharges.
+        """
+
+        if include_recent_discharges:
+            sources = self.recently_discharging_monitors
+        else:
+            sources = self.active_monitors
+        return self._calculate_downstream_info(sources)
+
+    def get_historical_downstream_info_geojson_at(
+        self, time: datetime.datetime, include_recent_discharges=False
+    ) -> FeatureCollection:
+        """
+        Get a GeoJSON feature collection of the downstream points for all active discharges in BNG coordinates at a given time in the past.
+        Contains information on number of upstream sources, the list of CSOs and the number of CSOs per km2.
+
+        Args:
+            time: The time to check for discharges.
+            include_recent_discharges: Whether to include discharges that have occurred in the last 48 hours. Defaults to False.
+        
+        Returns:
+            A GeoJSON FeatureCollection of the downstream points for all active discharges at the given time.
+        """
+
+        sources = self._get_sources_at(time, include_recent_discharges)
+        return self._calculate_downstream_info(sources)
 
     def get_monitor_timeseries(
         self, since: datetime.datetime
