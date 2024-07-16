@@ -36,7 +36,8 @@ class Monitor:
         total_discharge_last_6_months: Returns the total discharge in minutes in the last 6 months (183 days)
         total_discharge_last_12_months: Returns the total discharge in minutes in the last 12 months (365 days)
         total_discharge_since_start_of_year: Returns the total discharge in minutes since the start of the year
-        event_at: Returns the event that was occurring at the given time for the given monitor.
+        event_at: Returns the event that was occurring at the given time for the given monitor (or None).
+        recent_discharge_at: Returns whether there was a discharge event in the preceding 48 hours of a specified time.
     """
 
     def __init__(
@@ -271,14 +272,86 @@ class Monitor:
             The event that is ongoing at the given time for the given monitor.
         """
         out = None
+        now = datetime.datetime.now()
+        # Check if time is in the future and return none raising a warning in red:
+        if time > now:
+            warnings.warn(
+                "\033[91m"
+                + f"\n!WARNING! Time {time} is in the future. Returning None."
+                + "\033[0m"
+            )
+            return out
         for event in self.history:
-            if event.ongoing and time > event.start_time:
-                # If the event is ongoing and the time is after the start time, then it is the current event
-                out = event
-            elif event.start_time < time and time < event.end_time:
+            start = event.start_time
+            if event.ongoing:
+                end = now
+            else:
+                end = event.end_time
+            if start < time and time < end:
                 # If the event is not ongoing but the time is between the start and end time, then it is the current event
                 out = event
+                return out
+        warnings.warn(
+            f"\033[31m\n! WARNING ! No event found at {time} for {self.site_name}. \nProbably the monitor was not active at that time OR has no recorded events. \033[0m"
+        )
         return out
+
+    def recent_discharge_at(self, time: datetime.datetime) -> bool:
+        """
+        This function checks if there was a discharge event in the preceding 48 hours of a specified time.
+
+        Args:
+            time (datetime.datetime): The time to check for a discharge event.
+
+        Returns:
+            bool: True if there was a discharge event in the preceding 48 hours of the specified time, False otherwise.
+
+        Raises:
+            ValueError: If the target time is in the future.
+        """
+
+        now = datetime.datetime.now()
+        discharge_in_last_48_hours: bool = False
+        # Raise a value error if the target time is in the future
+        if time > now:
+            raise ValueError("The target time cannot be in the future.")
+
+        # Loop through the events in the monitor's history
+        for i in range(len(self.history)):
+            event = self.history[i]
+            start = event.start_time
+            if event.ongoing:
+                end = now
+            else:
+                end = event.end_time
+            if start < time and time < end:
+                # We have found the event containing target time
+                if event.event_type == "Discharging":
+                    # This event itself is a discharge, so we can quit the loop
+                    discharge_in_last_48_hours = True
+                    return discharge_in_last_48_hours
+                else:
+                    # This event was not a discharge, but we check the preceding events for a recent discharge
+                    while i + 2 < len(self.history):
+                        prev_event = self.history[i + 1]
+                        time_diff = time - prev_event.end_time
+                        if time_diff > datetime.timedelta(hours=48):
+                            # This event ended more than 48 hours before target time, so we can finish the search
+                            return discharge_in_last_48_hours
+                        elif prev_event.event_type == "Discharging":
+                            # This event was a discharge and ended within 48 hours of target time so we can quit having found a recent discharge
+                            discharge_in_last_48_hours = True
+                            return discharge_in_last_48_hours
+                        else:
+                            # This event was within 48 hours but was not a discharge, so we move on to the next event to check that one too
+                            i += 1
+                    # Searched all the previous events and found no recent discharges so we can finish the search, returning False
+                    return discharge_in_last_48_hours
+        # If we reach this point, it means that there were no events found at the target time
+        warnings.warn(
+            f"\033[31m\n! WARNING ! No event found at {time} for {self.site_name}. \nProbably the monitor was not active at that time OR has no recorded events. \033[0m"
+        )
+        return discharge_in_last_48_hours
 
     def _history_masks(
         self, times: List[datetime.datetime]
@@ -561,6 +634,7 @@ class WaterCompany(ABC):
         get_downstream_geojson: Get a geojson of the downstream points for all active discharges in BNG coordinates.
         get_downstream_info_geojson: Get a GeoJSON feature collection of the downstream points for all active discharges in BNG coordinates.
         plot_current_status: Plot the current status of the Water Company network showing the downstream impact & monitor statuses.
+        get_downstream_impact_at: Calculates the downstream extent of all monitors that were discharging (or, optionally, recently discharging) at a given time.
     """
 
     def __init__(self, clientID: str, clientSecret: str):
@@ -688,39 +762,65 @@ class WaterCompany(ABC):
         self._timestamp = datetime.datetime.now()
 
     def _calculate_downstream_impact(
-        self, include_recent_discharges: bool = False
-    ) -> None:
+        self, source_monitors: List[Monitor]
+    ) -> np.ndarray:
         """
-        Calculate the downstream impact for all active discharges. Stores a 2D numpy array to the WaterCompany called 'num_upstream_discharges'
-        that contains the number of upstream discharges at each point in the flow accumulator. The optional argument include_recent_discharges allows you to
-        include discharges that have occurred in the last 48 hours. Defaults to False.
-
-        This function returns None but stores the result (a 2D numpy array) in the WaterCompany object.
+        Given a list of source monitors, returns a 2D array which is the number of upstream discharges at each
+        cell in the DEM.
 
         Args:
-            include_recent_discharges: Whether to include discharges that have occurred in the last 48 hours. Defaults to False.
-        """
+            source_monitors: A list of Monitors which we want to calculate the downstream impact of
 
+        Returns:
+            2D numpy array of the domain area showing number of discharges upstream of a given point.
+        """
         # Extract all the xy coordinates of active discharges
         accumulator = self.accumulator
-        # Coords of all active discharges in OSGB
-        if not include_recent_discharges:
-            source_nodes = [
-                accumulator.coord_to_node(discharge.x_coord, discharge.y_coord)
-                for discharge in self.discharging_monitors
-            ]
-        else:
-            source_nodes = [
-                accumulator.coord_to_node(discharge.x_coord, discharge.y_coord)
-                for discharge in self.recently_discharging_monitors
-            ]
-
+        # Coords of all sources in OSGB
+        source_nodes = [
+            accumulator.coord_to_node(discharge.x_coord, discharge.y_coord)
+            for discharge in source_monitors
+        ]
         # Set up the source array for propagating discharges downstream
         source_array = np.zeros(accumulator.arr.shape).flatten()
         source_array[source_nodes] = 1
         source_array = source_array.reshape(accumulator.arr.shape)
         # Propagate the discharges downstream and add the result to the WaterCompany object
         return accumulator.accumulate(source_array)
+
+    def get_downstream_impact_at(self, time: datetime.datetime, include_recent_discharges: bool = False) -> np.ndarray:
+        """
+        Calculates the downstream impact of all monitors that were discharging (or, optionally, recently discharging)
+        at the given time.
+
+        Args:
+            time: The time to check for discharges.
+            include_recent_discharges: Whether to include discharges that have occurred in the last 48 hours. Defaults to False.
+        
+        Returns:
+            A 2D numpy array of the domain area showing the number of active/recently active discharges at the given time.
+
+        Raises:
+            ValueError: If the target time is in the future.
+        """
+        # Raise a value error if the target time is in the future
+        if time > datetime.datetime.now():
+            raise ValueError("The target time cannot be in the future.")
+
+        # Create the list of the source monitors that were discharging/recently discharging at the specified time
+        sources = []
+        if include_recent_discharges:
+            for monitor in self.active_monitors.values():
+                if monitor.recent_discharge_at(time):
+                    sources.append(monitor)
+        else:
+            for monitor in self.active_monitors.values():
+                event = monitor.event_at(time)
+                if event is not None and event.event_type == "Discharging":
+                    sources.append(monitor)
+
+        # Return the impact array
+        return self._calculate_downstream_impact(sources)
 
     def get_downstream_geojson(
         self, include_recent_discharges: bool = False
@@ -735,9 +835,11 @@ class WaterCompany(ABC):
             A geojson MultiLineString of the downstream points for all active (or optionally recent) discharges.
         """
         # Calculate the downstream impact
-        downstream_impact = self._calculate_downstream_impact(
-            include_recent_discharges=include_recent_discharges
-        )
+        if include_recent_discharges:
+            sources = self.recently_discharging_monitors
+        else:
+            sources = self.discharging_monitors
+        downstream_impact = self._calculate_downstream_impact(source_monitors=sources)
         # Convert the downstream impact to a geojson
         return self._accumulator.get_channel_segments(downstream_impact, threshold=0.9)
 
