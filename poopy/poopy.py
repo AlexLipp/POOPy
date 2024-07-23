@@ -567,14 +567,6 @@ class Event(ABC):
         """
         )
 
-
-class Discharge(Event):
-    """A class to represent a discharge event at a CSO."""
-
-    def __init__(self, *args, **kwargs) -> None:
-        super().__init__(*args, **kwargs)
-        self._event_type = "Discharging"
-
     def _to_row(self) -> pd.DataFrame:
         """
         Convert a discharge event to a row in a dataframe.
@@ -589,11 +581,19 @@ class Discharge(Event):
                 "StartDateTime": self.start_time,
                 "StopDateTime": self.end_time,
                 "Duration": self.duration,
-                "OngoingDischarge": self.ongoing,
+                "OngoingEvent": self.ongoing,
             },
             index=[0],
         )
         return row
+
+
+class Discharge(Event):
+    """A class to represent a discharge event at a CSO."""
+
+    def __init__(self, *args, **kwargs) -> None:
+        super().__init__(*args, **kwargs)
+        self._event_type = "Discharging"
 
 
 class Offline(Event):
@@ -1081,6 +1081,34 @@ class WaterCompany(ABC):
             print("\033[36m" + f"\tProcessing {monitor.site_name}" + "\033[0m")
             for event in monitor.history:
                 if event.event_type == "Discharging":
+                    df = pd.concat([df, event._to_row()], ignore_index=True)
+
+        df.sort_values(
+            by="StartDateTime", inplace=True, ignore_index=True, ascending=False
+        )
+        return df
+
+    def history_to_offline_df(self) -> pd.DataFrame:
+        """
+        Convert a water company's offline history to a dataframe
+
+        Returns:
+            A dataframe of discharge events.
+
+        Raises:
+            ValueError: If the history is not yet set. Run set_all_histories() first.
+
+        """
+        if self.history_timestamp is None:
+            raise ValueError(
+                "History may not yet be set. Try running set_all_histories() first."
+            )
+        print("\033[36m" + f"Building output data-table" + "\033[0m")
+        df = pd.DataFrame()
+        for monitor in self.active_monitors.values():
+            print("\033[36m" + f"\tProcessing {monitor.site_name}" + "\033[0m")
+            for event in monitor.history:
+                if event.event_type == "Offline":
                     df = pd.concat([df, event._to_row()], ignore_index=True)
 
         df.sort_values(
