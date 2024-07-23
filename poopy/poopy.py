@@ -789,7 +789,9 @@ class WaterCompany(ABC):
         # Propagate the discharges downstream and add the result to the WaterCompany object
         return accumulator.accumulate(source_array)
 
-    def get_historical_downstream_impact_at(self, time: datetime.datetime, include_recent_discharges: bool = False) -> np.ndarray:
+    def get_historical_downstream_impact_at(
+        self, time: datetime.datetime, include_recent_discharges: bool = False
+    ) -> np.ndarray:
         """
         Calculates the downstream impact of all monitors that were discharging (or, optionally, recently discharging)
         at the given time.
@@ -797,7 +799,7 @@ class WaterCompany(ABC):
         Args:
             time: The time to check for discharges.
             include_recent_discharges: Whether to include discharges that have occurred in the last 48 hours. Defaults to False.
-        
+
         Returns:
             A 2D numpy array of the domain area showing the number of active/recently active discharges at the given time.
         """
@@ -810,7 +812,7 @@ class WaterCompany(ABC):
         self, include_recent_discharges: bool = False
     ) -> MultiLineString:
         """
-        Get a MultiLineString of the downstream points for all active discharges in BNG coordinates. Note that this 
+        Get a MultiLineString of the downstream points for all active discharges in BNG coordinates. Note that this
         specific function is largely retained for legacy purposes
 
         Args:
@@ -830,7 +832,7 @@ class WaterCompany(ABC):
 
     def _calculate_downstream_info(self, sources: List[Monitor]) -> FeatureCollection:
         """
-        Calculate the downstream impact of a list of source monitors and return a GeoJSON FeatureCollection of the downstream points. 
+        Calculate the downstream impact of a list of source monitors and return a GeoJSON FeatureCollection of the downstream points.
         Contains information on number of upstream sources, the list of CSOs and the number of CSOs per km2.
 
         Args:
@@ -900,7 +902,7 @@ class WaterCompany(ABC):
 
         Returns:
             A list of monitors that were discharging (or, optionally, recently discharging) at the given time.
-        
+
         Raises:
             ValueError: If the target time is in the future.
         """
@@ -923,15 +925,18 @@ class WaterCompany(ABC):
         self, include_recent_discharges=False
     ) -> FeatureCollection:
         """
-        Get a GeoJSON feature collection of the downstream points for all CURRENT active discharges in BNG coordinates. 
-        Contains information on number of upstream sources, the list of CSOs and the number of CSOs per km2. 
+        Get a GeoJSON feature collection of the downstream points for all CURRENT active discharges in BNG coordinates.
+        Contains information on number of upstream sources, the list of CSOs and the number of CSOs per km2.
 
-        Args: 
+        Args:
             include_recent_discharges: Whether to include discharges that have occurred in the last 48 hours. Defaults to False.
-        
+
         Returns:
             A GeoJSON FeatureCollection of the downstream points for all active discharges.
         """
+        # Check that "include_recent_discharges" is a boolean
+        if not isinstance(include_recent_discharges, bool):
+            raise ValueError("include_recent_discharges must be a boolean")
 
         if include_recent_discharges:
             sources = self.recently_discharging_monitors
@@ -949,11 +954,13 @@ class WaterCompany(ABC):
         Args:
             time: The time to check for discharges.
             include_recent_discharges: Whether to include discharges that have occurred in the last 48 hours. Defaults to False.
-        
+
         Returns:
             A GeoJSON FeatureCollection of the downstream points for all active discharges at the given time.
         """
-
+        # Check that "include_recent_discharges" is a boolean
+        if not isinstance(include_recent_discharges, bool):
+            raise ValueError("include_recent_discharges must be a boolean")
         sources = self._get_sources_at(time, include_recent_discharges)
         return self._calculate_downstream_info(sources)
 
