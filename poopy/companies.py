@@ -1,7 +1,7 @@
 import datetime
 import warnings
-from multiprocessing import Pool, cpu_count
-from typing import Dict, List, Tuple, Any, Callable
+from multiprocessing import Pool
+from typing import Dict, List, Tuple, Callable
 
 import requests
 import pandas as pd
@@ -41,9 +41,10 @@ class ThamesWater(WaterCompany):
             known_hash=self.D8_FILE_HASH,
         )
 
-    def set_all_histories(self) -> None:
+    def set_all_histories_serial(self) -> None:
         """
-        Sets the historical data for all active monitors and store it in the history attribute of each monitor.
+        Sets the historical data for all active monitors and store it in the history attribute of each monitor. 
+        Retained for legacy/flexibility purposes, use `set_all_histories` instead (it's faster as it uses parallelisation).
         """
         self._history_timestamp = datetime.datetime.now()
         df = self._get_all_monitors_history_df()
@@ -57,20 +58,12 @@ class ThamesWater(WaterCompany):
                 f"\033[31m\n! WARNING ! The following historical monitors are no longer active: {inactive_names}\nStoring historical data for inactive monitors is not currently supported!\nIf this message has appeared it should be implemented...\033[0m "
             )
         print("\033[36m" + f"Building history for monitors..." + "\033[0m")
-        start = datetime.datetime.now()
         for name in active_names:
             subset = df[df["LocationName"] == name]
             monitor = self.active_monitors[name]
             monitor._history = self._events_df_to_events_list(subset, monitor)
-        end = datetime.datetime.now()
-        # Print how long it took without parallel, rounded to 2 decimal places:
-        print(
-            f"\033[36m"
-            + f"Processing took {round((end - start).total_seconds(), 2)} seconds."
-            + "\033[0m"
-        )
 
-    def set_all_histories_parallel(self) -> None:
+    def set_all_histories(self) -> None:
         """
         Sets the historical data for all active monitors and store it in the history attribute of each monitor.
         """
@@ -92,25 +85,14 @@ class ThamesWater(WaterCompany):
             (name, df, self.active_monitors, self._events_df_to_events_list)
             for name in active_names
         ]
-        
-        start = datetime.datetime.now()
 
-        # Use a Pool to parallelize the loop
+        # Use a Pool to parallelize the loop (this is faster)
         with Pool() as pool:
-            results = pool.map(process_monitor, args_list)
+            results = pool.map(_process_monitor_history_pl, args_list)
 
         # Update the monitor objects with the results in serial
         for name, history in results:
             self.active_monitors[name]._history = history
-
-        end = datetime.datetime.now()
-
-        # Print how long it took with parallel, rounded to 2 decimal places:
-        print(
-            f"\033[36m"
-            + f"Parallel Processing took {round((end - start).total_seconds(), 2)} seconds."
-            + "\033[0m"
-        )
 
     def _get_current_status_df(self) -> pd.DataFrame:
         """
@@ -524,16 +506,17 @@ class ThamesWater(WaterCompany):
         return event
 
 
-def process_monitor(
+def _process_monitor_history_pl(
     args: Tuple[
         str,
         pd.DataFrame,
         Dict[str, Monitor],
         Callable[[pd.DataFrame, Monitor], List[Event]],
     ]
-) -> None:
+) -> Tuple[str, List[Event]]:
     """
-    Process a single monitor in parallel. This function is used in the `set_all_histories_parallel` method of the `ThamesWater` class.
+    Process a single monitor's history in parallel. This function is used in 
+    the `set_all_histories_parallel` method of the `ThamesWater` class.
 
     Args:
         args: A tuple containing:
