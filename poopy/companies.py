@@ -41,10 +41,10 @@ class ThamesWater(WaterCompany):
             known_hash=self.D8_FILE_HASH,
         )
 
-    def set_all_histories_serial(self) -> None:
+    def set_all_histories(self) -> None:
         """
-        Sets the historical data for all active monitors and store it in the history attribute of each monitor. 
-        Retained for legacy/flexibility purposes, use `set_all_histories` instead (it's faster as it uses parallelisation).
+        Sets the historical data for all active monitors and store it in the history attribute of each monitor.  
+        A faster version of this function is available in the `set_all_histories_parallel` method. 
         """
         self._history_timestamp = datetime.datetime.now()
         df = self._get_all_monitors_history_df()
@@ -63,9 +63,10 @@ class ThamesWater(WaterCompany):
             monitor = self.active_monitors[name]
             monitor._history = self._events_df_to_events_list(subset, monitor)
 
-    def set_all_histories(self) -> None:
+    def set_all_histories_parallel(self) -> None:
         """
-        Sets the historical data for all active monitors and store it in the history attribute of each monitor.
+        Sets the historical data for all active monitors and store it in the history attribute of each monitor. 
+        Faster than the `set_all_histories` method if multiple cores are available. 
         """
         self._history_timestamp = datetime.datetime.now()
         df = self._get_all_monitors_history_df()
