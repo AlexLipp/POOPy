@@ -1,8 +1,9 @@
 import datetime
-import requests
 import warnings
-from typing import Dict, List
+from multiprocessing import Pool
+from typing import Dict, List, Tuple, Callable
 
+import requests
 import pandas as pd
 
 from poopy.poopy import Discharge, Event, Monitor, NoDischarge, Offline, WaterCompany
@@ -22,9 +23,9 @@ class ThamesWater(WaterCompany):
     HISTORY_VALID_UNTIL = datetime.datetime(2022, 4, 1, 0, 30, 0)
     # This is the date until by which the EDM monitors had been attached to the API and so the
     # point at which the record becomes valid. Note however that most records we actually
-    # not attached until 1/1/2023, so its not sensible to compare records before this date.  
+    # not attached until 1/1/2023, so its not sensible to compare records before this date.
 
-    # A large number of monitors have exactly 1st April 2022 as their first record, 
+    # A large number of monitors have exactly 1st April 2022 as their first record,
     # and a long period of offline that follows.
 
     # The URL and hash of the D8 raster file on the server
@@ -40,9 +41,10 @@ class ThamesWater(WaterCompany):
             known_hash=self.D8_FILE_HASH,
         )
 
-    def set_all_histories(self) -> None:
+    def set_all_histories_serial(self) -> None:
         """
-        Sets the historical data for all active monitors and store it in the history attribute of each monitor.
+        Sets the historical data for all active monitors and store it in the history attribute of each monitor. 
+        Retained for legacy/flexibility purposes, use `set_all_histories` instead (it's faster as it uses parallelisation).
         """
         self._history_timestamp = datetime.datetime.now()
         df = self._get_all_monitors_history_df()
@@ -60,6 +62,37 @@ class ThamesWater(WaterCompany):
             subset = df[df["LocationName"] == name]
             monitor = self.active_monitors[name]
             monitor._history = self._events_df_to_events_list(subset, monitor)
+
+    def set_all_histories(self) -> None:
+        """
+        Sets the historical data for all active monitors and store it in the history attribute of each monitor.
+        """
+        self._history_timestamp = datetime.datetime.now()
+        df = self._get_all_monitors_history_df()
+        historical_names = df["LocationName"].unique().tolist()
+        # Find which monitors present in historical_names are not in active_names
+        active_names = self.active_monitor_names
+        inactive_names = [x for x in historical_names if x not in active_names]
+        # If inactive is not empty raise a warning using the warnings module in red using ANSI escape codes
+        if inactive_names:
+            warnings.warn(
+                f"\033[31m\n! WARNING ! The following historical monitors are no longer active: {inactive_names}\nStoring historical data for inactive monitors is not currently supported!\nIf this message has appeared it should be implemented...\033[0m "
+            )
+        print("\033[36m" + f"Building history for monitors..." + "\033[0m")
+
+        # Prepare arguments for parallel processing
+        args_list = [
+            (name, df, self.active_monitors, self._events_df_to_events_list)
+            for name in active_names
+        ]
+
+        # Use a Pool to parallelize the loop (this is faster)
+        with Pool() as pool:
+            results = pool.map(_process_monitor_history_pl, args_list)
+
+        # Update the monitor objects with the results in serial
+        for name, history in results:
+            self.active_monitors[name]._history = history
 
     def _get_current_status_df(self) -> pd.DataFrame:
         """
@@ -97,9 +130,11 @@ class ThamesWater(WaterCompany):
         df.reset_index(drop=True, inplace=True)
         return df
 
-    def _get_monitor_events_df(self, monitor: Monitor, verbose: bool = False) -> pd.DataFrame:
+    def _get_monitor_events_df(
+        self, monitor: Monitor, verbose: bool = False
+    ) -> pd.DataFrame:
         """
-        Get the historical status of a particular monitor by calling the API. 
+        Get the historical status of a particular monitor by calling the API.
         If verbose is set to True, the function will print the dataframe of the full API response to the console.
         """
         print(
@@ -116,17 +151,19 @@ class ThamesWater(WaterCompany):
             "value_1": monitor.site_name,
         }
         df = self._handle_current_api_response(url=url, params=params, verbose=verbose)
-        # Note, we use handle_current_api_response here because we want to try and fetch all records not just those up to a certain date. This 
-        # is because individual monitors don't have the same "start" date and so the historical fetching criterion varies. However, this is 
+        # Note, we use handle_current_api_response here because we want to try and fetch all records not just those up to a certain date. This
+        # is because individual monitors don't have the same "start" date and so the historical fetching criterion varies. However, this is
         # not ideal because it means that if the API erroneously returns an empty dataframe in place of an error message, then the function will
         # return an empty dataframe. This is the fault of the API, not this code but it is something to be aware of, and needs to be fixed.
         return df
 
-    def _handle_current_api_response(self, url: str, params: str, verbose: bool = False) -> pd.DataFrame:
+    def _handle_current_api_response(
+        self, url: str, params: str, verbose: bool = False
+    ) -> pd.DataFrame:
         """
         Creates and handles the response from the API. If the response is valid, return a dataframe of the response.
         Otherwise, raise an exception. This is a helper function for the `_get_current_status_df` and `_get_monitor_history_df` functions.
-        Loops through the API calls until all the records are fetched. If verbose is set to True, the function will print the full dataframe 
+        Loops through the API calls until all the records are fetched. If verbose is set to True, the function will print the full dataframe
         to the console.
         """
         df = pd.DataFrame()
@@ -163,7 +200,9 @@ class ThamesWater(WaterCompany):
         # Print the full dataframe to the console if verbose is set to True
         if verbose:
             print("\033[36m" + "\tPrinting full API response..." + "\033[0m")
-            with pd.option_context('display.max_rows', None, 'display.max_columns', None):  # more options can be specified also
+            with pd.option_context(
+                "display.max_rows", None, "display.max_columns", None
+            ):  # more options can be specified also
                 print(df)
 
         return df
@@ -177,7 +216,7 @@ class ThamesWater(WaterCompany):
         API erroneously returns an empty dataframe in place of an error message. Note that there is one case where this function
         will behave unexpectedly: if the number of records returned is exactly an integer multiple of the API limit number of events
         (e.g., 0, 1000, 2000 etc.), then the function will return an empty dataframe. This is because the function cannot distinguish
-        between this case and the case where the API genuinely returns no records. This is the fault of the API, not this code but 
+        between this case and the case where the API genuinely returns no records. This is the fault of the API, not this code but
         it is something to be aware of, and needs to be fixed.
 
         See also the `handle_current_api_response` function.
@@ -245,14 +284,32 @@ class ThamesWater(WaterCompany):
                         # Check the number of rows and compare to the API limit
                         if df_temp.shape[0] < self.API_LIMIT:
                             # If the number of records is less than the API limit, then we have fetched all records
-                            print("\033[36m" + "\tLast request contained {0} many records, fewer than the API limit of {1}.".format(df_temp.shape[0], self.API_LIMIT) + "\033[0m")
-                            print("\033[36m" + "\tNo more records to fetch!" + "\033[0m")
+                            print(
+                                "\033[36m"
+                                + "\tLast request contained {0} many records, fewer than the API limit of {1}.".format(
+                                    df_temp.shape[0], self.API_LIMIT
+                                )
+                                + "\033[0m"
+                            )
+                            print(
+                                "\033[36m" + "\tNo more records to fetch!" + "\033[0m"
+                            )
                             df = pd.concat([df, df_temp])
-                            break 
+                            break
                         else:
                             # If the number of records is equal to the API limit, possibly more records to fetch so we continue.
-                            print("\033[36m" + "\tLast request contained {0} many records, equal to the API limit of {1}.".format(df_temp.shape[0], self.API_LIMIT) + "\033[0m")
-                            print("\033[36m" + "\tChecking if there are more records to fetch..." + "\033[0m")
+                            print(
+                                "\033[36m"
+                                + "\tLast request contained {0} many records, equal to the API limit of {1}.".format(
+                                    df_temp.shape[0], self.API_LIMIT
+                                )
+                                + "\033[0m"
+                            )
+                            print(
+                                "\033[36m"
+                                + "\tChecking if there are more records to fetch..."
+                                + "\033[0m"
+                            )
             else:
                 raise Exception(
                     "\tRequest failed with status code {0}, and error message: {1}".format(
@@ -381,12 +438,14 @@ class ThamesWater(WaterCompany):
                         history.append(event)
         return history
 
-    def _get_monitor_history(self, monitor: Monitor, verbose: bool = False) -> List[Event]:
+    def _get_monitor_history(
+        self, monitor: Monitor, verbose: bool = False
+    ) -> List[Event]:
         """
         Creates a list of historical Event objects from the alert stream for a given monitor.
         This is done by iterating through the alert stream and creating an Event object for each
         start/stop event pair. If the alert stream is invalid, a warning is raised and the entry is skipped.
-        If the alert stream is empty, an empty list is returned. Optionally prints the full dataframe 
+        If the alert stream is empty, an empty list is returned. Optionally prints the full dataframe
         of the API response to the console if verbose is set to True.
 
         Args:
@@ -445,3 +504,29 @@ class ThamesWater(WaterCompany):
                 + row["LocationName"]
             )
         return event
+
+
+def _process_monitor_history_pl(
+    args: Tuple[
+        str,
+        pd.DataFrame,
+        Dict[str, Monitor],
+        Callable[[pd.DataFrame, Monitor], List[Event]],
+    ]
+) -> Tuple[str, List[Event]]:
+    """
+    Process a single monitor's history in parallel. This function is used in 
+    the `set_all_histories_parallel` method of the `ThamesWater` class.
+
+    Args:
+        args: A tuple containing:
+            - name: The name of the monitor.
+            - df: The DataFrame containing historical data.
+            - active_monitors: A dictionary of active monitors.
+            - events_df_to_events_list: A function to convert DataFrame to events list.
+    """
+    name, df, active_monitors, events_df_to_events_list = args
+    subset = df[df["LocationName"] == name]
+    monitor = active_monitors[name]
+    history = events_df_to_events_list(subset, monitor)
+    return name, history
