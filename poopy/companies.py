@@ -22,9 +22,9 @@ class ThamesWater(WaterCompany):
     HISTORY_VALID_UNTIL = datetime(2022, 4, 1, 0, 30, 0)
     # This is the date until by which the EDM monitors had been attached to the API and so the
     # point at which the record becomes valid. Note however that most records we actually
-    # not attached until 1/1/2023, so its not sensible to compare records before this date.  
+    # not attached until 1/1/2023, so its not sensible to compare records before this date.
 
-    # A large number of monitors have exactly 1st April 2022 as their first record, 
+    # A large number of monitors have exactly 1st April 2022 as their first record,
     # and a long period of offline that follows.
 
     # The URL and hash of the D8 raster file on the server
@@ -115,8 +115,8 @@ class ThamesWater(WaterCompany):
             "value_1": monitor.site_name,
         }
         df = self._handle_current_api_response(url=url, params=params)
-        # Note, we use handle_current_api_response here because we want to try and fetch all records not just those up to a certain date. This 
-        # is because individual monitors don't have the same "start" date and so the historical fetching criterion varies. However, this is 
+        # Note, we use handle_current_api_response here because we want to try and fetch all records not just those up to a certain date. This
+        # is because individual monitors don't have the same "start" date and so the historical fetching criterion varies. However, this is
         # not ideal because it means that if the API erroneously returns an empty dataframe in place of an error message, then the function will
         # return an empty dataframe. This is the fault of the API, not this code but it is something to be aware of, and needs to be fixed.
         return df
@@ -168,7 +168,7 @@ class ThamesWater(WaterCompany):
         API erroneously returns an empty dataframe in place of an error message. Note that there is one case where this function
         will behave unexpectedly: if the number of records returned is exactly an integer multiple of the API limit number of events
         (e.g., 0, 1000, 2000 etc.), then the function will return an empty dataframe. This is because the function cannot distinguish
-        between this case and the case where the API genuinely returns no records. This is the fault of the API, not this code but 
+        between this case and the case where the API genuinely returns no records. This is the fault of the API, not this code but
         it is something to be aware of, and needs to be fixed.
 
         See also the `handle_current_api_response` function.
@@ -236,14 +236,32 @@ class ThamesWater(WaterCompany):
                         # Check the number of rows and compare to the API limit
                         if df_temp.shape[0] < self.API_LIMIT:
                             # If the number of records is less than the API limit, then we have fetched all records
-                            print("\033[36m" + "\tLast request contained {0} many records, fewer than the API limit of {1}.".format(df_temp.shape[0], self.API_LIMIT) + "\033[0m")
-                            print("\033[36m" + "\tNo more records to fetch!" + "\033[0m")
+                            print(
+                                "\033[36m"
+                                + "\tLast request contained {0} many records, fewer than the API limit of {1}.".format(
+                                    df_temp.shape[0], self.API_LIMIT
+                                )
+                                + "\033[0m"
+                            )
+                            print(
+                                "\033[36m" + "\tNo more records to fetch!" + "\033[0m"
+                            )
                             df = pd.concat([df, df_temp])
-                            break 
+                            break
                         else:
                             # If the number of records is equal to the API limit, possibly more records to fetch so we continue.
-                            print("\033[36m" + "\tLast request contained {0} many records, equal to the API limit of {1}.".format(df_temp.shape[0], self.API_LIMIT) + "\033[0m")
-                            print("\033[36m" + "\tChecking if there are more records to fetch..." + "\033[0m")
+                            print(
+                                "\033[36m"
+                                + "\tLast request contained {0} many records, equal to the API limit of {1}.".format(
+                                    df_temp.shape[0], self.API_LIMIT
+                                )
+                                + "\033[0m"
+                            )
+                            print(
+                                "\033[36m"
+                                + "\tChecking if there are more records to fetch..."
+                                + "\033[0m"
+                            )
             else:
                 raise Exception(
                     "\tRequest failed with status code {0}, and error message: {1}".format(
@@ -438,17 +456,20 @@ class ThamesWater(WaterCompany):
 
 class WelshWater(WaterCompany):
     """
-    Creates an object to interact with the WelshWater EDM API. 
+    Creates an object to interact with the WelshWater EDM API.
     There is no auth on this endpoint required currently.
     There is only a current status endpoint, no historical endpoint available.
     """
 
     API_ROOT = "https://services3.arcgis.com/KLNF7YxtENPLYVey/arcgis/rest/services"
-    CURRENT_API_RESOURCE = "/Spill_Prod/FeatureServer/0/query?where=1=1&outFields=*&f=json"
+    CURRENT_API_RESOURCE = (
+        "/Spill_Prod/FeatureServer/0/query?where=1=1&outFields=*&f=json"
+    )
     HISTORICAL_API_RESOURCE = ""
     API_LIMIT = 2000  # Max num of outputs that can be requested from the API at once
 
-    def __init__(self, clientID, clientSecret):
+    def __init__(self, clientID="", clientSecret=""):
+        # No auth required for this API so no need to pass in clientID and clientSecret
         print("\033[36m" + "Initialising Welsh Water object..." + "\033[0m")
         super().__init__(clientID, clientSecret)
         self._name = "WelshWater"
@@ -465,8 +486,8 @@ class WelshWater(WaterCompany):
         url = self.API_ROOT + self.CURRENT_API_RESOURCE
 
         params = {
-            "resultRecordCount": self.API_LIMIT, 
-            "resultOffset": ""
+            "resultRecordCount": self.API_LIMIT,
+            "resultOffset": "",  # No offset required for this API
         }
         df = self._handle_current_api_response(url=url, params=params)
 
@@ -476,7 +497,6 @@ class WelshWater(WaterCompany):
         """
         Creates and handles the response from the API. If the response is valid, return a dataframe of the response.
         Otherwise, raise an exception. This is a helper function for the `_get_current_status_df` (and `_get_monitor_history_df` not implemented for WW) functions.
-        Loops through the API calls until all the records are fetched.
         """
         df = pd.DataFrame()
 
@@ -493,11 +513,10 @@ class WelshWater(WaterCompany):
             if "features" not in response:
                 print("\033[36m" + "\tNo records to fetch" + "\033[0m")
             else:
-                data = response['features']
+                data = response["features"]
                 for location in data:
                     location = location["attributes"]
                     df_temp = pd.json_normalize(location)
-                    #print(df_temp)
                     df = pd.concat([df, df_temp])
         else:
             raise Exception(
@@ -505,8 +524,16 @@ class WelshWater(WaterCompany):
                     r.status_code, r.json()
                 )
             )
-        #params["resultOffset"] += params["limit"]  # Increment offset for the next request
         df.reset_index(drop=True, inplace=True)
+        # if number of rows is exactly the API limit, there may be more records to fetch so print a warning
+        if df.shape[0] == self.API_LIMIT:
+            warnings.warn(
+                "\033[36m"
+                + "\tNumber of records fetched is equal to the API limit of {0}. There may be missing records!".format(
+                    self.API_LIMIT
+                )
+                + "\033[0m"
+            )
         return df
 
     def _fetch_active_monitors(self) -> Dict[str, Monitor]:
@@ -526,33 +553,54 @@ class WelshWater(WaterCompany):
         """
         Not available for WW API.
         """
+        # Print a helpful message to the user that this function is not available for this API
+        print(
+            "\033[36m"
+            + "This function is not available for the Welsh Water API."
+            + "\033[0m"
+        )
         pass
-        return 
+        return
 
     def set_all_histories(self) -> None:
         """
         Not available for WW API.
         """
+        # Print a helpful message to the user that this function is not available for this API
+        print(
+            "\033[36m"
+            + "This function is not available for the Welsh Water API."
+            + "\033[0m"
+        )
         pass
         return
 
     def _row_to_monitor(self, row: pd.DataFrame) -> Monitor:
         """
-        Convert a row of the Thames Water active API response to a Monitor object. See `_get_current_status_df`
+        Convert a row of the Welsh Water active API response to a Monitor object. See `_get_current_status_df`
         """
-        current_time = pd.to_datetime('now')  # Get the current time
-        if pd.notnull(row['stop_date_time_discharge']):
-            last_48h = (current_time - pd.to_datetime(row['stop_date_time_discharge'])) <= timedelta(hours=48)
+        current_time = (
+            self._timestamp
+        )  # Get the current time which corresponds to when the API was called (so it is same for all monitors)
+
+        # if monitor currently discharging we set last_48h to be True.
+        if row["status"] == "Overflow Operating":
+            last_48h = True
+        elif pd.notnull(row["stop_date_time_discharge"]):
+            # if monitor has different status but has discharged in the last 48 hours we also set last_48h to be True.
+            last_48h = (
+                current_time - pd.to_datetime(row["stop_date_time_discharge"])
+            ) <= timedelta(hours=48)
         else:
-            last_48h = ""
+            last_48h = None
         monitor = Monitor(
             site_name=row["asset_name"],
             permit_number=row["permit_number"],
             x_coord=row["discharge_x_location"],
             y_coord=row["discharge_y_location"],
-            receiving_watercourse=row["bathing_water_name"],
+            receiving_watercourse=row["Receiving_Water"],
             water_company=self,
-            discharge_in_last_48h= last_48h
+            discharge_in_last_48h=last_48h,
         )
         return monitor
 
@@ -560,19 +608,21 @@ class WelshWater(WaterCompany):
         """
         Convert a row of the Welsh Water active API response to an Event object. See `_get_current_status_df`
         """
-        if row["status"] == "Storm Overflow Operating":
+        if row["status"] == "Overflow Operating":
             event = Discharge(
                 monitor=monitor,
                 ongoing=True,
                 start_time=pd.to_datetime(row["start_date_time_discharge"]),
             )
-        elif row["status"] == "Storm Overflow Not Operating":
+        elif row["status"] == "Overflow Not Operating":
             event = NoDischarge(
                 monitor=monitor,
                 ongoing=True,
-                start_time= None #pd.to_datetime('1970-01-01'), # The api doesn't provide a status change date for this
+                start_time=pd.to_datetime(
+                    row["stop_date_time_discharge"]
+                ),  # Assume that the start of "not discharging" is the end of the last discharge event
             )
-        elif row["status"] == "Storm Overflow Not Operating (Has in the last 24 hours)":
+        elif row["status"] == "Overflow Not Operating (Has in the last 24 hours)":
             event = NoDischarge(
                 monitor=monitor,
                 ongoing=True,
@@ -582,7 +632,7 @@ class WelshWater(WaterCompany):
             event = Offline(
                 monitor=monitor,
                 ongoing=True,
-                start_time= None, # !!! The api doesn't provide a status change date for this
+                start_time=None,  # !!! The api doesn't provide a status change date for this
             )
         else:
             raise Exception(

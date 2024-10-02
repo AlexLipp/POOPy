@@ -338,9 +338,9 @@ class Monitor:
                                 times.index(start_round) : times.index(recent_end)
                             ] = True
                     else:
-                        online[
-                            times.index(start_round) : times.index(end_round)
-                        ] = False
+                        online[times.index(start_round) : times.index(end_round)] = (
+                            False
+                        )
 
         return online, active, recent
 
@@ -387,8 +387,8 @@ class Event(ABC):
         self._start_time = start_time
         self._ongoing = ongoing
         self._end_time = end_time
-        self._duration = self.duration
         self._event_type = event_type
+        self._duration = self.duration
         self._validate()
 
     def _validate(self):
@@ -412,11 +412,7 @@ class Event(ABC):
             else:
                 return (datetime.datetime.now() - self._start_time).total_seconds() / 60
         else:
-            print(
-                "\033[91m"
-                + "!WARNING! Event has no start time. Returning a NaN duration."
-                + "\033[0m"
-            )
+            # If the start time is None, return nan (i.e., the event has no sensible duration)
             return np.nan
 
     @property
@@ -585,10 +581,11 @@ class WaterCompany(ABC):
         self._name: str = None
         self._clientID = clientID
         self._clientSecret = clientSecret
-        self._active_monitors: Dict[str, Monitor] = self._fetch_active_monitors()
         self._timestamp: datetime.datetime = datetime.datetime.now()
+        self._active_monitors: Dict[str, Monitor] = self._fetch_active_monitors()
         self._accumulator: D8Accumulator = None
         self._d8_file_path: str = None
+        self._history_timestamp: datetime.datetime = None # Will be set if all monitor histories are set
 
     @abstractmethod
     def _fetch_active_monitors(self) -> Dict[str, Monitor]:
@@ -644,6 +641,9 @@ class WaterCompany(ABC):
     @property
     def history_timestamp(self) -> datetime.datetime:
         """Return the timestamp of the last historical data update."""
+        if self._history_timestamp is None:
+            warnings.warn("History has not been set. Returning None.")
+            return None
         return self._history_timestamp
 
     @property
@@ -833,7 +833,16 @@ class WaterCompany(ABC):
         Returns:
             A pandas DataFrame containing timeseries of the number of CSOs that 1) were active, 2) were active in last
             48 hours, 3) online at a list of times every 15 minutes since the given datetime.
+
+        Raises:
+            ValueError: If the history is not yet set. Run set_all_histories() first.
         """
+
+        if self.history_timestamp is None:
+            raise ValueError(
+                "History may not yet be set. Try running set_all_histories() first."
+            )
+
         times = []
         now = datetime.datetime.now()
         time = since
