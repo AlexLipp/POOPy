@@ -1,6 +1,6 @@
 # POOPy
 
-**P**oo discharge monitoring with **O**bject **O**riented **Py**thon
+**POOPy** = **P**ollution discharge monitoring with **O**bject **O**riented **Py**thon
 
 ## Description
 
