@@ -585,7 +585,9 @@ class WaterCompany(ABC):
         self._active_monitors: Dict[str, Monitor] = self._fetch_active_monitors()
         self._accumulator: D8Accumulator = None
         self._d8_file_path: str = None
-        self._history_timestamp: datetime.datetime = None # Will be set if all monitor histories are set
+        self._history_timestamp: datetime.datetime = (
+            None  # Will be set if all monitor histories are set
+        )
 
     @abstractmethod
     def _fetch_active_monitors(self) -> Dict[str, Monitor]:
@@ -623,6 +625,7 @@ class WaterCompany(ABC):
         This is all handled by the pooch package. The hash of the file is checked against the known hash to ensure the file is not corrupted.
         If the file is already present in the pooch cache, it will not be downloaded again.
         """
+        print("\033[94m" + "Fetching D8 file from Zenodo source..." + "\033[0m")
         file_path = pooch.retrieve(url=url, known_hash=known_hash)
 
         return file_path

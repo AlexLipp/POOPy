@@ -28,7 +28,7 @@ class ThamesWater(WaterCompany):
     # and a long period of offline that follows.
 
     # The URL and hash of the D8 raster file on the server
-    D8_FILE_URL = "https://zenodo.org/records/10426423/files/thames_d8.nc?download=1"
+    D8_FILE_URL = "https://zenodo.org/records/13882300/files/thames_d8.nc?download=1"
     D8_FILE_HASH = "md5:1047a14906237cd436fd483e87c1647d"
 
     def __init__(self, clientID: str, clientSecret: str):
@@ -468,11 +468,18 @@ class WelshWater(WaterCompany):
     HISTORICAL_API_RESOURCE = ""
     API_LIMIT = 2000  # Max num of outputs that can be requested from the API at once
 
+    D8_FILE_URL = "https://zenodo.org/records/13882300/files/welsh_d8.nc?download=1"
+    D8_FILE_HASH = "md5:8c965ad0597929df3bc54bc728ed8404"
+
     def __init__(self, clientID="", clientSecret=""):
         # No auth required for this API so no need to pass in clientID and clientSecret
         print("\033[36m" + "Initialising Welsh Water object..." + "\033[0m")
         super().__init__(clientID, clientSecret)
         self._name = "WelshWater"
+        self._d8_file_path = self._fetch_d8_file(
+            url=self.D8_FILE_URL,
+            known_hash=self.D8_FILE_HASH,
+        )
 
     def _get_current_status_df(self) -> pd.DataFrame:
         """
