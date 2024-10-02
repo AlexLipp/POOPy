@@ -44,7 +44,7 @@ class ThamesWater(WaterCompany):
         """
         Sets the historical data for all active monitors and store it in the history attribute of each monitor.
         """
-        self._history_timestamp = datetime.datetime.now()
+        self._history_timestamp = datetime.now()
         df = self._get_all_monitors_history_df()
         historical_names = df["LocationName"].unique().tolist()
         # Find which monitors present in historical_names are not in active_names
