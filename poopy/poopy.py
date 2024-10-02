@@ -412,7 +412,12 @@ class Event(ABC):
             else:
                 return (datetime.datetime.now() - self._start_time).total_seconds() / 60
         else:
-            return 0
+            print(
+                "\033[91m"
+                + "!WARNING! Event has no start time. Returning a NaN duration."
+                + "\033[0m"
+            )
+            return np.nan
 
     @property
     def ongoing(self) -> bool:
@@ -422,6 +427,12 @@ class Event(ABC):
     @property
     def start_time(self) -> Optional[datetime.datetime]:
         """Return the start time of the event."""
+        if self._start_time is None:
+            warnings.warn(
+                "\033[91m"
+                + "!WARNING! Event has no start time. Returning None."
+                + "\033[0m"
+            )
         return self._start_time
 
     @property
