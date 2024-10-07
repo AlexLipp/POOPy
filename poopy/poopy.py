@@ -142,7 +142,11 @@ class Monitor:
     def discharge_in_last_48h(self) -> bool:
         # Raise a warning if the discharge_in_last_48h is not set
         if self._discharge_in_last_48h is None:
-            warnings.warn("discharge_in_last_48h is not set. Returning None.")
+            warnings.warn(
+                "\033[91m"
+                f"!ADVISORY! Information on discharges in last 48hrs could not be set for '{self.site_name}'. `.discharge_in_last_48h` attribute returns None."
+                + "\033[0m"
+            )
         return self._discharge_in_last_48h
 
     @current_event.setter
@@ -217,7 +221,7 @@ class Monitor:
         if len(events) == 0:
             warnings.warn(
                 "\033[91m"
-                + f"\n!WARNING! Monitor {self.site_name} has no recorded events. Returning None."
+                + f"\n!ADVISORY! Monitor '{self.site_name}' has no recorded events. Returning None."
                 + "\033[0m"
             )
 
@@ -502,7 +506,7 @@ class Event(ABC):
         if self._start_time is None:
             warnings.warn(
                 "\033[91m"
-                + "!WARNING! Event has no start time. Returning None."
+                + f"!ADVISORY! For {self.event_type} event for '{self.monitor.site_name}' (in {self.monitor.water_company.name}) start time information is not available. `start_time` attribute returns None."
                 + "\033[0m"
             )
         return self._start_time
@@ -514,7 +518,7 @@ class Event(ABC):
         if self._ongoing:
             warnings.warn(
                 "\033[91m"
-                + "!WARNING! Event is ongoing and has no end time. Returning None."
+                + f"!ADVISORY! This {self.event_type} event for '{self.monitor.site_name}' (in {self.monitor.water_company.name}) is ongoing. `end_time` attribute returns None."
                 + "\033[0m"
             )
         return self._end_time
@@ -703,7 +707,6 @@ class WaterCompany(ABC):
         This is all handled by the pooch package. The hash of the file is checked against the known hash to ensure the file is not corrupted.
         If the file is already present in the pooch cache, it will not be downloaded again.
         """
-        print("\033[94m" + "Fetching D8 file from Zenodo source..." + "\033[0m")
         file_path = pooch.retrieve(url=url, known_hash=known_hash)
 
         return file_path
