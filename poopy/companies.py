@@ -41,14 +41,15 @@ class ThamesWater(WaterCompany):
             url=self.D8_FILE_URL,
             known_hash=self.D8_FILE_HASH,
         )
+        self._alerts_table = f"{self._name}_alerts.csv"
 
     def set_all_histories(self) -> None:
         """
-        Sets the historical data for all active monitors and store it in the history attribute of each monitor.  
-        A faster version of this function is available in the `set_all_histories_parallel` method. 
+        Sets the historical data for all active monitors and store it in the history attribute of each monitor.
+        A faster version of this function is available in the `set_all_histories_parallel` method.
         """
         self._history_timestamp = datetime.now()
-        df = self._get_all_monitors_history_df()
+        df = self._fetch_all_monitors_history_df()
         historical_names = df["LocationName"].unique().tolist()
         # Find which monitors present in historical_names are not in active_names
         active_names = self.active_monitor_names
@@ -62,15 +63,15 @@ class ThamesWater(WaterCompany):
         for name in active_names:
             subset = df[df["LocationName"] == name]
             monitor = self.active_monitors[name]
-            monitor._history = self._events_df_to_events_list(subset, monitor)
+            monitor._history = self._alerts_df_to_events_list(subset, monitor)
 
     def set_all_histories_parallel(self) -> None:
         """
-        Sets the historical data for all active monitors and store it in the history attribute of each monitor. 
-        Faster than the `set_all_histories` method if multiple cores are available. 
+        Sets the historical data for all active monitors and store it in the history attribute of each monitor.
+        Faster than the `set_all_histories` method if multiple cores are available.
         """
         self._history_timestamp = datetime.datetime.now()
-        df = self._get_all_monitors_history_df()
+        df = self._fetch_all_monitors_history_df()
         historical_names = df["LocationName"].unique().tolist()
         # Find which monitors present in historical_names are not in active_names
         active_names = self.active_monitor_names
@@ -84,7 +85,7 @@ class ThamesWater(WaterCompany):
 
         # Prepare arguments for parallel processing
         args_list = [
-            (name, df, self.active_monitors, self._events_df_to_events_list)
+            (name, df, self.active_monitors, self._alerts_df_to_events_list)
             for name in active_names
         ]
 
@@ -96,7 +97,7 @@ class ThamesWater(WaterCompany):
         for name, history in results:
             self.active_monitors[name]._history = history
 
-    def _get_current_status_df(self) -> pd.DataFrame:
+    def _fetch_current_status_df(self) -> pd.DataFrame:
         """
         Get the current status of the monitors by calling the API.
         """
@@ -114,7 +115,7 @@ class ThamesWater(WaterCompany):
 
         return df
 
-    def _get_all_monitors_history_df(self) -> pd.DataFrame:
+    def _fetch_all_monitors_history_df(self) -> pd.DataFrame:
         """
         Get the historical status of all monitors by calling the API.
         """
@@ -132,7 +133,7 @@ class ThamesWater(WaterCompany):
         df.reset_index(drop=True, inplace=True)
         return df
 
-    def _get_monitor_events_df(
+    def _fetch_monitor_events_df(
         self, monitor: Monitor, verbose: bool = False
     ) -> pd.DataFrame:
         """
@@ -164,7 +165,7 @@ class ThamesWater(WaterCompany):
     ) -> pd.DataFrame:
         """
         Creates and handles the response from the API. If the response is valid, return a dataframe of the response.
-        Otherwise, raise an exception. This is a helper function for the `_get_current_status_df` and `_get_monitor_history_df` functions.
+        Otherwise, raise an exception. This is a helper function for the `_fetch_current_status_df` and `_fetch_monitor_history_df` functions.
         Loops through the API calls until all the records are fetched. If verbose is set to True, the function will print the full dataframe
         to the console.
         """
@@ -327,7 +328,7 @@ class ThamesWater(WaterCompany):
         """
         Returns a dictionary of Monitor objects representing the active monitors.
         """
-        df = self._get_current_status_df()
+        df = self._fetch_current_status_df()
         monitors = {}
         for _, row in df.iterrows():
             monitor = self._row_to_monitor(row=row)
@@ -336,111 +337,7 @@ class ThamesWater(WaterCompany):
             monitors[monitor.site_name] = monitor
         return monitors
 
-    def _events_df_to_events_list(
-        self, df: pd.DataFrame, monitor: Monitor
-    ) -> List[Event]:
-        def _warn(reason: str) -> None:
-            """Automatically raises a warning with the correct message"""
-            warnings.warn(
-                f"\033[91m! WARNING ! Alert stream for monitor {monitor.site_name} contains an invalid entry! \nReason: {reason}. Skipping that entry...\033[0m"
-            )
-
-        print("\033[36m" + f"\tBuilding history for {monitor.site_name}..." + "\033[0m")
-        history = []
-        history.append(monitor.current_event)
-        df.reset_index(drop=True, inplace=True)
-
-        if df.empty:
-            # If the dataframe is empty, there are no events to create
-            return []
-
-        if df["LocationName"].unique().size > 1:
-            raise Exception(
-                "The dataframe contains events for multiple monitors, beyond the one specified!"
-            )
-        if df["LocationName"].unique()[0] != monitor.site_name:
-            raise Exception(
-                "The dataframe contains events for a different monitor than the one specified!"
-            )
-
-        for index, row in df.iterrows():
-            n_rows = len(df)
-            next_index = index + 1
-
-            if index == n_rows - 1:
-                # At the last entry in the df...
-                if not (
-                    (row["AlertType"] == "Start")
-                    or (row["AlertType"] == "Offline start")
-                ):
-                    # ... and it's not a start event!
-                    reason = "the last recorded event is not a Start event!"
-                    _warn(reason)
-                    continue
-                else:
-                    break
-
-            if row["AlertType"] == "Stop":
-                # Found the end of an event...
-                if df.iloc[next_index]["AlertType"] != "Start":
-                    # ... but it's not preceded by a start event!
-                    reason = f"a stop event was not preceded by Start event at {df.iloc[index]['DateTime']}"
-                    _warn(reason)
-                    continue
-                else:
-                    # ... its preceded by a start event, so we create a Discharge event!
-                    stop = pd.to_datetime(row["DateTime"])
-                    start = pd.to_datetime(df.iloc[next_index]["DateTime"])
-                    event = Discharge(
-                        monitor=monitor, ongoing=False, start_time=start, end_time=stop
-                    )
-                    history.append(event)
-
-            if row["AlertType"] == "Offline stop":
-                # Found the end of an offline event...
-                if df.iloc[next_index]["AlertType"] != "Offline start":
-                    # ... but it's not preceded by an offline start event!
-                    reason = f"an offline Stop event was not preceded by Offline Start event at {df.iloc[index]['DateTime']}"
-                    _warn(reason)
-                    continue
-                else:
-                    # ... its preceded by an offline start event, so we create an Offline event!
-                    stop = pd.to_datetime(row["DateTime"])
-                    start = pd.to_datetime(df.iloc[index + 1]["DateTime"])
-                    event = Offline(
-                        monitor=monitor, ongoing=False, start_time=start, end_time=stop
-                    )
-                    history.append(event)
-
-            if row["AlertType"] == "Start" or row["AlertType"] == "Offline start":
-                # Found the start of an event...
-                if index == n_rows - 1:
-                    # ... but it's the last entry in the df, so we can't create an event! Quit the loop.
-                    break
-                else:
-                    if (
-                        df.iloc[next_index]["AlertType"] == "Start"
-                        or df.iloc[next_index]["AlertType"] == "Offline start"
-                    ):
-                        # ... and it's followed by another start event!
-                        reason = f"a Start or Offline Start event was preceded by a Start or Offline Start event at {df.iloc[index]['DateTime']}"
-                        _warn(reason)
-                        continue
-                    else:
-                        # ... and it's not followed by another start event, so we create a NoDischarge event
-                        # to represent the period between the start of this event and the end of the previous event.
-                        stop = pd.to_datetime(row["DateTime"])
-                        start = pd.to_datetime(df.iloc[next_index]["DateTime"])
-                        event = NoDischarge(
-                            monitor=monitor,
-                            ongoing=False,
-                            start_time=start,
-                            end_time=stop,
-                        )
-                        history.append(event)
-        return history
-
-    def _get_monitor_history(
+    def _fetch_monitor_history(
         self, monitor: Monitor, verbose: bool = False
     ) -> List[Event]:
         """
@@ -458,12 +355,12 @@ class ThamesWater(WaterCompany):
             List[Event]: A list of Event objects representing the historical events for the monitor
         """
         # Get the historical data for the monitor from the API
-        events_df = self._get_monitor_events_df(monitor, verbose=verbose)
-        return self._events_df_to_events_list(df=events_df, monitor=monitor)
+        events_df = self._fetch_monitor_events_df(monitor, verbose=verbose)
+        return self._alerts_df_to_events_list(df=events_df, monitor=monitor)
 
     def _row_to_monitor(self, row: pd.DataFrame) -> Monitor:
         """
-        Convert a row of the Thames Water active API response to a Monitor object. See `_get_current_status_df`
+        Convert a row of the Thames Water active API response to a Monitor object. See `_fetch_current_status_df`
         """
         monitor = Monitor(
             site_name=row["LocationName"],
@@ -478,7 +375,7 @@ class ThamesWater(WaterCompany):
 
     def _row_to_event(self, row: pd.DataFrame, monitor: Monitor) -> Event:
         """
-        Convert a row of the Thames Water active API response to an Event object. See `_get_current_status_df`
+        Convert a row of the Thames Water active API response to an Event object. See `_fetch_current_status_df`
         """
         if row["AlertStatus"] == "Discharging":
             event = Discharge(
@@ -534,8 +431,9 @@ class WelshWater(WaterCompany):
             url=self.D8_FILE_URL,
             known_hash=self.D8_FILE_HASH,
         )
+        self._alerts_table = f"{self._name}_alerts.csv"
 
-    def _get_current_status_df(self) -> pd.DataFrame:
+    def _fetch_current_status_df(self) -> pd.DataFrame:
         """
         Get the current status of the monitors by calling the API.
         """
@@ -557,7 +455,7 @@ class WelshWater(WaterCompany):
     def _handle_current_api_response(self, url: str, params: str) -> pd.DataFrame:
         """
         Creates and handles the response from the API. If the response is valid, return a dataframe of the response.
-        Otherwise, raise an exception. This is a helper function for the `_get_current_status_df` (and `_get_monitor_history_df` not implemented for WW) functions.
+        Otherwise, raise an exception. This is a helper function for the `_fetch_current_status_df` (and `_fetch_monitor_history_df` not implemented for WW) functions.
         """
         df = pd.DataFrame()
 
@@ -601,7 +499,7 @@ class WelshWater(WaterCompany):
         """
         Returns a dictionary of Monitor objects representing the active monitors.
         """
-        df = self._get_current_status_df()
+        df = self._fetch_current_status_df()
         monitors = {}
         for _, row in df.iterrows():
             monitor = self._row_to_monitor(row=row)
@@ -610,7 +508,7 @@ class WelshWater(WaterCompany):
             monitors[monitor.site_name] = monitor
         return monitors
 
-    def _get_monitor_history(self, monitor: Monitor) -> List[Event]:
+    def _fetch_monitor_history(self, monitor: Monitor) -> List[Event]:
         """
         Not available for WW API.
         """
@@ -638,7 +536,7 @@ class WelshWater(WaterCompany):
 
     def _row_to_monitor(self, row: pd.DataFrame) -> Monitor:
         """
-        Convert a row of the Welsh Water active API response to a Monitor object. See `_get_current_status_df`
+        Convert a row of the Welsh Water active API response to a Monitor object. See `_fetch_current_status_df`
         """
         current_time = (
             self._timestamp
@@ -667,7 +565,7 @@ class WelshWater(WaterCompany):
 
     def _row_to_event(self, row: pd.DataFrame, monitor: Monitor) -> Event:
         """
-        Convert a row of the Welsh Water active API response to an Event object. See `_get_current_status_df`
+        Convert a row of the Welsh Water active API response to an Event object. See `_fetch_current_status_df`
         """
         if row["status"] == "Overflow Operating":
             event = Discharge(
@@ -704,6 +602,7 @@ class WelshWater(WaterCompany):
             )
         return event
 
+
 def _process_monitor_history_pl(
     args: Tuple[
         str,
@@ -713,7 +612,7 @@ def _process_monitor_history_pl(
     ]
 ) -> Tuple[str, List[Event]]:
     """
-    Process a single monitor's history in parallel. This function is used in 
+    Process a single monitor's history in parallel. This function is used in
     the `set_all_histories_parallel` method of the `ThamesWater` class.
 
     Args:
@@ -721,11 +620,10 @@ def _process_monitor_history_pl(
             - name: The name of the monitor.
             - df: The DataFrame containing historical data.
             - active_monitors: A dictionary of active monitors.
-            - events_df_to_events_list: A function to convert DataFrame to events list.
+            - alerts_df_to_events_list: A function to convert DataFrame to events list.
     """
-    name, df, active_monitors, events_df_to_events_list = args
+    name, df, active_monitors, alerts_df_to_events_list = args
     subset = df[df["LocationName"] == name]
     monitor = active_monitors[name]
-    history = events_df_to_events_list(subset, monitor)
+    history = alerts_df_to_events_list(subset, monitor)
     return name, history
-
