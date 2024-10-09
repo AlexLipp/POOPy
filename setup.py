@@ -13,7 +13,7 @@ extensions = [
 
 setup(
     name="poopy",
-    version="0.2",
+    version="0.2.1",
     ext_modules=cythonize(extensions),
     include_dirs=[numpy.get_include()],
     packages=find_packages(),
