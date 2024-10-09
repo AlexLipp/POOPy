@@ -2,6 +2,7 @@ import datetime
 import warnings
 from abc import ABC, abstractmethod
 from typing import Dict, List, Optional, Union, Tuple
+import os
 
 import matplotlib.pyplot as plt
 import numpy as np
@@ -125,7 +126,7 @@ class Monitor:
         Args:
             verbose: Whether to print the dataframe of API responses when the history is set. Defaults to False.
         """
-        self._history = self.water_company._get_monitor_history(self, verbose=verbose)
+        self._history = self.water_company._fetch_monitor_history(self, verbose=verbose)
 
     @property
     def history(self) -> List["Event"]:
@@ -636,6 +637,8 @@ class WaterCompany(ABC):
         history_timestamp: The timestamp of the last historical data update (set in the `get_history` method of the child class).
         clientID: The client ID for the Water Company API (set by the child class).
         clientSecret: The client secret for the Water Company API (set by the child class).
+        alerts_table: The filename of the table that contains (manually generated) alerts.
+        build_all_histories_locally: A method to build the history of all active monitors using the manually created alerts table.
         active_monitors: A dictionary of active monitors accessed by site name.
         active_monitor_names: A list of the names of active monitors.
         accumulator: The D8 flow accumulator for the region of the water company.
@@ -682,7 +685,7 @@ class WaterCompany(ABC):
         pass
 
     @abstractmethod
-    def _get_monitor_history(self, monitor: Monitor) -> List[Event]:
+    def _fetch_monitor_history(self, monitor: Monitor) -> List[Event]:
         """
         Get the history of events for a monitor.
 
@@ -700,6 +703,69 @@ class WaterCompany(ABC):
         Sets the historical data for all active monitors and store it in the history attribute of each monitor.
         """
         pass
+
+    def build_all_histories_locally(self) -> None:
+        """
+        Uses the manually created alerts table, built from repeated calls to the current status API, to build the history of all active monitors.
+        Note that this method is only recommended for use when the API is not available or when the historical data is not available from the API.
+        The results will only be as good as the alerts table, which is built from repeated calls to the API.
+
+        IF YOU HAVE NOT BUILT AN ALERTS TABLE BY REGULARLY CALLING THE API, THIS METHOD WILL NOT PRODUCE SENSIBLE RESULTS AND SHOULD NOT BE USED
+        """
+
+        # Print a VERY BIG warning in general to say that this method is only recommended if an API is not available and
+        # that the results are dependent on the alerts table which is built from repeated calls to the API. If this has
+        # not been done the results will be nonsense.
+        # Ask the user to confirm they have understood this. Make the message surrounded by a box of #'s and in red
+
+        print(
+            "\033[91m"
+            + "###############################################################################################"
+            + "\n\t\t\t\tIMPORTANT MESSAGE PLEASE READ \nThis method is not recommended for use by most users!"
+            + "\nHISTORIES ARE ONLY VALID IF THE .update_alerts_table() method has been called regularly"
+            + "\nIf this is not the case THE RESULTS WILL BE NONSENSE"
+            + "\n\t\t\t\tDO YOU UNDERSTAND AND WISH TO PROCEED? [y/n]"
+            + "\n###############################################################################################"
+            + "\033[0m"
+        )
+
+        # Wait for user input
+        user_input = input("Enter 'y' to proceed or 'n' to cancel...: ").strip().lower()
+        if user_input != "y":
+            print("Operation cancelled by user.")
+            return
+
+        if self.name == "Thames Water":
+            warnings.warn(
+                "\033[31m"
+                + f"! ALERT ! This method is not recommended for Thames Water. Use the historical API instead with .set_all_histories()."
+                + "\033[0m"
+            )
+
+        # Check if the alerts table exists
+        if not os.path.exists(self._alerts_table):
+            raise FileNotFoundError(
+                f"Alerts table not found at {self.alerts_table}!\
+                                    \nTry running update_alerts_table() regularly over a period of time to build the alerts table."
+            )
+
+        # Set the history timestamp to the current time
+        self._history_timestamp = datetime.datetime.now()
+        df = pd.read_csv(self.alerts_table)
+        historical_names = df["LocationName"].unique().tolist()
+        # Find which monitors present in historical_names are not in active_names
+        active_names = self.active_monitor_names
+        inactive_names = [x for x in historical_names if x not in active_names]
+        # If inactive is not empty raise a warning using the warnings module in red using ANSI escape codes
+        if inactive_names:
+            warnings.warn(
+                f"\033[31m\n! WARNING ! The following historical monitors are no longer active: {inactive_names}\nStoring historical data for inactive monitors is not currently supported!\nIf this message has appeared it should be implemented...\033[0m "
+            )
+        print("\033[36m" + f"Building history for monitors..." + "\033[0m")
+        for name in active_names:
+            subset = df[df["LocationName"] == name]
+            monitor = self.active_monitors[name]
+            monitor._history = self._alerts_df_to_events_list(subset, monitor)
 
     def _fetch_d8_file(self, url: str, known_hash: str) -> str:
         """
@@ -739,6 +805,11 @@ class WaterCompany(ABC):
     def clientSecret(self) -> str:
         """Return the client secret for the API."""
         return self._clientSecret
+
+    @property
+    def alerts_table(self) -> str:
+        """Return the filename of the alerts file."""
+        return self._alerts_table
 
     @property
     def active_monitors(self) -> List[Monitor]:
@@ -984,6 +1055,115 @@ class WaterCompany(ABC):
         sources = self._get_sources_at(time, include_recent_discharges)
         return self._calculate_downstream_info(sources)
 
+    def _alerts_df_to_events_list(
+        self, df: pd.DataFrame, monitor: Monitor
+    ) -> List[Event]:
+        """
+        Takes a standard dataframe of "Alerts" (e.g., that which would be created by the ThamesWater API or the .update_alerts_table method)
+        and converts it into a list of Events.
+        """
+
+        def _warn(reason: str) -> None:
+            """Automatically raises a warning with the correct message"""
+            warnings.warn(
+                f"\033[91m! WARNING ! Alert stream for monitor {monitor.site_name} contains an invalid entry! \nReason: {reason}. Skipping that entry...\033[0m"
+            )
+
+        print("\033[36m" + f"\tBuilding history for {monitor.site_name}..." + "\033[0m")
+        history = []
+        history.append(monitor.current_event)
+        df.reset_index(drop=True, inplace=True)
+
+        if df.empty:
+            # If the dataframe is empty, there are no events to create
+            return []
+
+        if df["LocationName"].unique().size > 1:
+            raise Exception(
+                "The dataframe contains events for multiple monitors, beyond the one specified!"
+            )
+        if df["LocationName"].unique()[0] != monitor.site_name:
+            raise Exception(
+                "The dataframe contains events for a different monitor than the one specified!"
+            )
+
+        for index, row in df.iterrows():
+            n_rows = len(df)
+            next_index = index + 1
+
+            if index == n_rows - 1:
+                # At the last entry in the df...
+                if not (
+                    (row["AlertType"] == "Start")
+                    or (row["AlertType"] == "Offline start")
+                ):
+                    # ... and it's not a start event!
+                    reason = "the last recorded event is not a Start event!"
+                    _warn(reason)
+                    continue
+                else:
+                    break
+
+            if row["AlertType"] == "Stop":
+                # Found the end of an event...
+                if df.iloc[next_index]["AlertType"] != "Start":
+                    # ... but it's not preceded by a start event!
+                    reason = f"a stop event was not preceded by Start event at {df.iloc[index]['DateTime']}"
+                    _warn(reason)
+                    continue
+                else:
+                    # ... its preceded by a start event, so we create a Discharge event!
+                    stop = pd.to_datetime(row["DateTime"])
+                    start = pd.to_datetime(df.iloc[next_index]["DateTime"])
+                    event = Discharge(
+                        monitor=monitor, ongoing=False, start_time=start, end_time=stop
+                    )
+                    history.append(event)
+
+            if row["AlertType"] == "Offline stop":
+                # Found the end of an offline event...
+                if df.iloc[next_index]["AlertType"] != "Offline start":
+                    # ... but it's not preceded by an offline start event!
+                    reason = f"an offline Stop event was not preceded by Offline Start event at {df.iloc[index]['DateTime']}"
+                    _warn(reason)
+                    continue
+                else:
+                    # ... its preceded by an offline start event, so we create an Offline event!
+                    stop = pd.to_datetime(row["DateTime"])
+                    start = pd.to_datetime(df.iloc[index + 1]["DateTime"])
+                    event = Offline(
+                        monitor=monitor, ongoing=False, start_time=start, end_time=stop
+                    )
+                    history.append(event)
+
+            if row["AlertType"] == "Start" or row["AlertType"] == "Offline start":
+                # Found the start of an event...
+                if index == n_rows - 1:
+                    # ... but it's the last entry in the df, so we can't create an event! Quit the loop.
+                    break
+                else:
+                    if (
+                        df.iloc[next_index]["AlertType"] == "Start"
+                        or df.iloc[next_index]["AlertType"] == "Offline start"
+                    ):
+                        # ... and it's followed by another start event!
+                        reason = f"a Start or Offline Start event was preceded by a Start or Offline Start event at {df.iloc[index]['DateTime']}"
+                        _warn(reason)
+                        continue
+                    else:
+                        # ... and it's not followed by another start event, so we create a NoDischarge event
+                        # to represent the period between the start of this event and the end of the previous event.
+                        stop = pd.to_datetime(row["DateTime"])
+                        start = pd.to_datetime(df.iloc[next_index]["DateTime"])
+                        event = NoDischarge(
+                            monitor=monitor,
+                            ongoing=False,
+                            start_time=start,
+                            end_time=stop,
+                        )
+                        history.append(event)
+        return history
+
     def get_monitor_timeseries(
         self, since: datetime.datetime
     ) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
@@ -1144,6 +1324,365 @@ class WaterCompany(ABC):
             by="StartDateTime", inplace=True, ignore_index=True, ascending=False
         )
         return df
+
+    def update_alerts_table(self, verbose: bool = False) -> None:
+        """
+        Function that automatically generates a table of alerts based on the current status of the monitors and changes in status,
+        relative previously created alerts. This function is designed to be run at regular intervals to update the alerts table.
+        The alerts file is stored in '[WaterCompanyName].alerts_table.csv' and contains "alerts" which indicate a change of status
+        of a particular monitor. It is modelled on the ThamesWater historical API data.
+
+        The logic of alert updates is: 1) Alerts are given for every change of status 2) All starts must be followed by a stop
+        (i.e., (offline) start- > (offline) stop) 3) We assume the previous event continues until the new event. Thus, we 'cannot see'
+        events that start and finish between update times. If the function is run for the first time, it will create a new alerts table.
+        The function will then update the alerts table based on the current status of the monitors and changes in status, relative to
+        previously created alerts. The alerts table can thus be used to create a history of alerts for the water company network, even
+        if the data is not directly available from an API.
+
+        Sometimes, events do not have a start-time associated with them (e.g., WelshWater for some offline events). As a result, so as to
+        not exclude this information we set the start-time of the event to be when we first *observe* the event (i.e., when the current status API
+        first detects that event). This is a conservative approach, but it ensures that we do not lose information and are not excluding, for instance
+        offline events from the system.
+
+        Note that "stop" events are generally 'inferred'. i.e., they are created by the function if a stop event is necessary to continue
+        the logic that all starts must be followed by a stop. For instance, if we go from "Start" to "Offline Start" the function will add a
+        "Stop" event 1 second before the "Offline Start" event.
+
+        Args:
+            verbose: Whether to print out the changes in status of the monitors. Defaults to False.
+        """
+
+        alerts_filename = self._alerts_table
+        # If file doesn't exist initiate it and put in the first alerts
+        if not os.path.exists(alerts_filename):
+            if os.path.exists(self._alerts_table_update_list):
+                # Delete it
+                os.remove(self._alerts_table_update_list)
+            print("Alerts table doesn't exist! \nCreating new alerts table...")
+            alerts = pd.DataFrame()
+            for monitor in self.active_monitors.values():
+                row = _make_start_alert_row(monitor)
+                alerts = pd.concat([alerts, row])
+
+        # We have a file, so we need to update it
+        else:
+            # Load in current table of alerts
+            alerts = pd.read_csv(alerts_filename)
+
+            # Loop through all monitors operated by the water company
+            for name, monitor in self.active_monitors.items():
+                if name not in alerts["LocationName"].values:
+                    # If the monitor is currently not in the alerts table, we add the current event to the alerts table.
+                    # This might occur if a new monitor has been added to the network (or if the alerts table has been deleted)
+                    print(
+                        f"Monitor {name} (currently {monitor.event.event_type}) had no previous recorded events so adding to alerts table..."
+                    )
+                    row = _make_start_alert_row(monitor)
+                    alerts = pd.concat([row, alerts])
+
+                else:
+                    # Get the last alert from that monitor
+                    last_alert = alerts[alerts["LocationName"] == name].iloc[0]
+                    last_time = last_alert["DateTime"]
+                    # Get alert corresponding to current status of monitor
+                    current_alert_row = _make_start_alert_row(monitor)
+                    current_time = current_alert_row["DateTime"].values[0]
+                    # The underlying logic of this sequence is:
+                    # 1) Alerts are given for every change of status
+                    # 2) All starts must be followed by a stop (i.e., (offline) start- > (offline) stop)
+                    # 3) We assume the previous event continues until the new event.
+                    # Thus, we 'cannot see' events that start and finish between update times.
+                    if last_time != current_time:
+                        # Current alert doesn't match existing alert, so status has changed
+                        prev_alert = last_alert["AlertType"]
+                        new_alert = current_alert_row["AlertType"].values[0]
+
+                        if prev_alert == "Stop" and new_alert == "Start":
+                            # If a spill has started we add the "Start" alert row to dataframe
+                            alerts = pd.concat([current_alert_row, alerts])
+                            (
+                                print(f"Monitor '{name}' has started discharging!")
+                                if verbose
+                                else None
+                            )
+
+                        elif prev_alert == "Start" and new_alert == "Stop":
+                            # If a spill has ended we add the "Stop" alert row to dataframe
+                            alerts = pd.concat([current_alert_row, alerts])
+                            (
+                                print(f"Monitor '{name}' has stopped discharging!")
+                                if verbose
+                                else None
+                            )
+
+                        elif prev_alert == "Offline start" and new_alert == "Start":
+                            # If offline period has ended and turned into a discharge...
+                            # We add an offline stop for 1s before start event
+                            # Check if last_time is after current_time using datetime objects
+                            if pd.to_datetime(current_time) < pd.to_datetime(last_time):
+                                # The time of the current event is before the last event! Probably means that
+                                # the offline event ended but status has _reverted_ to original no discharge status
+                                # So, we push the _reverted_ event to actually begin 1s after *now*.
+
+                                print(
+                                    f"Monitor '{name}' is assumed to have reverted to a discharge status after an offline period. Adjusting start time to 1s after now."
+                                )
+                                off_stop = _make_offline_stop_alert_row(
+                                    monitor,
+                                    monitor.water_company.timestamp
+                                    - datetime.timedelta(seconds=1),
+                                )
+                                alerts = pd.concat([off_stop, alerts])
+                                shifted_start = make_alert_row(
+                                    monitor,
+                                    "Start",
+                                    monitor.water_company.timestamp,
+                                    note="Start time shifted forwards to update time after reversion from an offline period.",
+                                )
+                                alerts = pd.concat([shifted_start, alerts])
+                                (
+                                    print(
+                                        f"Monitor '{name}' has stopped being offline and started discharging! \nHowever, start-time predates last event. Adjusting start time to now to allow for continuous sequence of events.."
+                                    )
+                                    if verbose
+                                    else None
+                                )
+                            else:
+                                # Assume that the offline period has ended and the monitor has started discharging.
+                                # Add an offline stop alert for 1s before the start of the current event
+                                off_stop = _make_offline_stop_alert_row(
+                                    monitor,
+                                    monitor.current_event.start_time
+                                    - datetime.timedelta(seconds=1),
+                                )
+                                alerts = pd.concat([off_stop, alerts])
+                                alerts = pd.concat([current_alert_row, alerts])
+                                (
+                                    print(
+                                        f"Monitor '{name}' has stopped being offline and started discharging!"
+                                    )
+                                    if verbose
+                                    else None
+                                )
+
+                        elif prev_alert == "Offline start" and new_alert == "Stop":
+                            # If offline period has ended and turned into no discharge...
+                            # We add an offline stop alert for 1s before the start of the current event...
+                            # ...but then do nothing!
+                            if pd.to_datetime(current_time) < pd.to_datetime(last_time):
+                                # The time of the current event is before the last event! Probably means that
+                                # the offline event ended but status has _reverted_ to original no discharge status
+                                # So, we push the _reverted_ event to actually begin 1s after *now*.
+
+                                print(
+                                    f"Monitor '{name}' is assumed to have reverted to a no discharge status after an offline period. Adjusting start time to 1s after now."
+                                )
+                                off_stop = _make_offline_stop_alert_row(
+                                    monitor,
+                                    monitor.water_company.timestamp
+                                    - datetime.timedelta(seconds=1),
+                                )
+                                alerts = pd.concat([off_stop, alerts])
+                                shifted_start = make_alert_row(
+                                    monitor,
+                                    "Stop",
+                                    monitor.water_company.timestamp,
+                                    note="Stop time shifted *forwards* to update time after assumed reversion to prior event from an offline period.",
+                                )
+                                alerts = pd.concat([shifted_start, alerts])
+                                (
+                                    print(
+                                        f"Monitor '{name}' has stopped being offline (and is not discharging)! \nHowever, start-time predates last event. Adjusting start time to now to allow for continuous sequence of events.."
+                                    )
+                                    if verbose
+                                    else None
+                                )
+
+                            else:
+                                off_stop = _make_offline_stop_alert_row(
+                                    monitor,
+                                    monitor.current_event.start_time
+                                    - datetime.timedelta(seconds=1),
+                                )
+                                alerts = pd.concat([off_stop, alerts])
+                                (
+                                    print(
+                                        f"Monitor '{name}' has stopped being offline (and is not discharging)!"
+                                    )
+                                    if verbose
+                                    else None
+                                )
+
+                        elif prev_alert == "Stop" and new_alert == "Offline start":
+                            # If no discharge followed by offline, add offline start to alerts
+                            alerts = pd.concat([current_alert_row, alerts])
+                            (
+                                print(f"Monitor '{name}' has gone offline!")
+                                if verbose
+                                else None
+                            )
+
+                        elif prev_alert == "Start" and new_alert == "Offline start":
+                            # If discharge event followed by offline
+                            # We need to add a "Stop" event before the Offline event starts
+                            stop = _make_stop_alert_row(
+                                monitor,
+                                monitor.current_event.start_time
+                                - datetime.timedelta(minutes=1),
+                            )
+                            alerts = pd.concat([stop, alerts])
+                            alerts = pd.concat([current_alert_row, alerts])
+                            (
+                                print(
+                                    f"Monitor '{name}' has gone offline in the middle of a discharge event!"
+                                )
+                                if verbose
+                                else None
+                            )
+
+                        elif prev_alert == new_alert:
+                            # There are two cases where this can occur:
+                            # 1) An event has no start time associated with it and we are simply revisiting it (we can ignore this)
+                            # [We suppress the warnings here as we know that the start time is None]
+                            with warnings.catch_warnings():
+                                warnings.simplefilter("ignore")
+                                if monitor.current_event.start_time is None:
+                                    # # Have commented out the print statement here as it was happening too frequently...
+                                    # (
+                                    #     print(
+                                    #         f"Monitor {monitor.site_name} (still) has no start time associated with current event. Ignoring."
+                                    #     )
+                                    #     if verbose
+                                    #     else None
+                                    # )
+                                    continue
+
+                                # Check that the current_event.start_time is before the last event
+                                if pd.to_datetime(current_time) < pd.to_datetime(
+                                    last_time
+                                ):
+                                    # This probably means that the event previously *reverted* to a (no) discharge status
+                                    # from an offline period and the current status has no "memory" of the offline period.
+                                    continue
+                                else:
+                                    # 2) An event has started and finished between last history checks that we are missing
+                                    (
+                                        print(
+                                            f"For monitor {monitor.site_name}, event type has not changed but time of event start has.\
+                                            \nLikely, an event started and finished between last history checks that we are missing."
+                                        )
+                                        if verbose
+                                        else None
+                                    )
+                                    # Access the row index of the desired entry
+                                    row_index = alerts[
+                                        alerts["LocationName"] == name
+                                    ].index[0]
+                                    # Modify the entry directly in the DataFrame
+                                    alerts.at[row_index, "Note"] = (
+                                        f"One or more offline or discharge events may have been missed between {last_time} and {current_time}"
+                                    )
+                                    continue
+                        else:
+                            raise RuntimeError(
+                                f"For monitor {monitor.site_name}, event type has changed from {prev_alert} to {new_alert} but no corresponding action has been implemented."
+                            )
+
+        # Sort output from oldest bottom to newest top
+        alerts.sort_values(by="DateTime", inplace=True, ascending=False)
+        # Reset index to ensure it is in order
+        alerts.reset_index(drop=True, inplace=True)
+        # Overwrite the previous alerts table
+        alerts.to_csv(
+            alerts_filename,
+            index=False,
+        )
+        # Add the update time to the update list
+        with open(self._alerts_table_update_list, "a") as f:
+            f.write(f"{self.timestamp}\n")
+        print(
+            "Alerts table updated successfully at",
+            self.timestamp.strftime("%Y-%m-%d %H:%M"),
+        )
+
+
+def make_alert_row(
+    monitor: Monitor, alert_type: str, datetime_obj: datetime.datetime, note: str = ""
+) -> pd.DataFrame:
+    """
+    Creates an alert row for a given monitor and alert type.
+
+    Args:
+        monitor (Monitor): The monitor object to which the alert belongs.
+        alert_type (str): The type of alert (e.g., "Start", "Stop", "Offline start", "Offline stop").
+        datetime_obj (datetime.datetime): The datetime object representing the time of the alert.
+
+    Returns:
+        pd.DataFrame: A DataFrame containing the alert row.
+    """
+
+    # Check that the alert type is valid
+    if alert_type not in ["Start", "Stop", "Offline start", "Offline stop"]:
+        raise ValueError("Invalid alert type.")
+    return pd.DataFrame(
+        {
+            "LocationName": monitor.site_name,
+            "PermitNumber": monitor.permit_number,
+            "DateTime": datetime_obj.strftime("%Y-%m-%dT%H:%M:%S"),
+            "AlertType": alert_type,
+            "X": monitor.x_coord,
+            "Y": monitor.y_coord,
+            "ReceivingWaterCourse": monitor.receiving_watercourse,
+            "AlertCreated": monitor.water_company.timestamp.strftime(
+                "%Y-%m-%dT%H:%M:%S"
+            ),
+            "Note": note,
+        },
+        index=[0],
+    )
+
+
+def _make_start_alert_row(monitor: Monitor):
+    """
+    Takes an Event object and returns a row which corresponds to an alert signalling the start of the current event of the monitor.
+    """
+    event = monitor.current_event
+    # Determine the alert type based on the event type
+    if event.event_type == "Not Discharging":
+        alert_type = "Stop"
+    elif event.event_type == "Discharging":
+        alert_type = "Start"
+    elif event.event_type == "Offline":
+        alert_type = "Offline start"
+    else:
+        raise ValueError("Event type not recognised.")
+
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore")
+        if event.start_time is None:
+            # If the event has no start time, we use the timestamp of the watercompany.
+            # Implicitly it says that the event has started at the time of checking but we cannot be sure exactly when.
+            datetime = monitor.water_company.timestamp
+            # Add a note to say that the event had no start time associated with it
+            note = "Event had no start time. Alert time set to time of last update."
+            return make_alert_row(monitor, alert_type, datetime, note)
+        else:
+            datetime = event.start_time
+            return make_alert_row(monitor, alert_type, datetime)
+
+
+def _make_offline_stop_alert_row(monitor: Monitor, endtime: datetime.datetime):
+    """
+    Makes an alert row corresponding to the end of an offline event.
+    """
+    return make_alert_row(monitor, "Offline stop", endtime, note="Imputed")
+
+
+def _make_stop_alert_row(monitor: Monitor, endtime: datetime.datetime):
+    """
+    Makes an alert row corresponding to the end of a discharging event.
+    """
+    return make_alert_row(monitor, "Stop", endtime, note="Imputed")
 
 
 def round_time_down_15(time: datetime.datetime) -> datetime.datetime:
