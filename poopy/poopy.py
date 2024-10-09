@@ -743,7 +743,7 @@ class WaterCompany(ABC):
             )
 
         # Check if the alerts table exists
-        if not os.path.exists(self.alerts_table):
+        if not os.path.exists(self._alerts_table):
             raise FileNotFoundError(
                 f"Alerts table not found at {self.alerts_table}!\
                                     \nTry running update_alerts_table() regularly over a period of time to build the alerts table."
@@ -1355,6 +1355,9 @@ class WaterCompany(ABC):
         alerts_filename = self._alerts_table
         # If file doesn't exist initiate it and put in the first alerts
         if not os.path.exists(alerts_filename):
+            if os.path.exists(self._alerts_table_update_list):
+                # Delete it
+                os.remove(self._alerts_table_update_list)
             print("Alerts table doesn't exist! \nCreating new alerts table...")
             alerts = pd.DataFrame()
             for monitor in self.active_monitors.values():
@@ -1593,6 +1596,13 @@ class WaterCompany(ABC):
         alerts.to_csv(
             alerts_filename,
             index=False,
+        )
+        # Add the update time to the update list
+        with open(self._alerts_table_update_list, "a") as f:
+            f.write(f"{self.timestamp}\n")
+        print(
+            "Alerts table updated successfully at",
+            self.timestamp.strftime("%Y-%m-%d %H:%M"),
         )
 
 

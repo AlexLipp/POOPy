@@ -42,6 +42,7 @@ class ThamesWater(WaterCompany):
             known_hash=self.D8_FILE_HASH,
         )
         self._alerts_table = f"{self._name}_alerts.csv"
+        self._alerts_table_update_list = f"{self._name}_alerts_update_list.dat"
 
     def set_all_histories(self) -> None:
         """
@@ -432,6 +433,7 @@ class WelshWater(WaterCompany):
             known_hash=self.D8_FILE_HASH,
         )
         self._alerts_table = f"{self._name}_alerts.csv"
+        self._alerts_table_update_list = f"{self._name}_alerts_update_list.dat"
 
     def _fetch_current_status_df(self) -> pd.DataFrame:
         """
