@@ -14,8 +14,8 @@
 ## Description
 
 This is a Python package for interfacing with Event Duration Monitoring (EDM) devices maintained by English (and Welsh!) Water Companies. This package was ostensibly developed to provide the back-end for [SewageMap.co.uk](https://github.com/AlexLipp/thames-sewage) but may be generically useful for those exploring the impact of sewage discharges on rivers. Currently, `POOPy` supports data from the following water companies: 
-- [Thames Water](https://github.com/AlexLipp/POOPy/blob/main/poopy/companies.py#L13)
-- [Welsh Water/Dŵr Cymru](https://github.com/AlexLipp/POOPy/blob/main/poopy/companies.py#L511)
+- [Thames Water](https://github.com/AlexLipp/POOPy/blob/36491efea510162ce0db54472caa7daa5c1dd5b3/poopy/companies.py#L13)
+- [Welsh Water/Dŵr Cymru](https://github.com/AlexLipp/POOPy/blob/36491efea510162ce0db54472caa7daa5c1dd5b3/poopy/companies.py#L409)
 
 It can be used, for example to make figures like...
 
