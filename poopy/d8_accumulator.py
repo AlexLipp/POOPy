@@ -244,22 +244,28 @@ class D8Accumulator:
             return np.asarray(profile), np.amax(dstream_dist) - dstream_dist
 
     def node_to_coord(self, node: int) -> Tuple[float, float]:
-        """Converts a node index to a coordinate pair"""
+        """Converts a node index to a coordinate pair for the centre of the pixel"""
         nrows, ncols = self.arr.shape
         if node > ncols * nrows or node < 0:
             raise ValueError("Node is out of bounds")
         x_ind = node % ncols
         y_ind = node // ncols
         ulx, dx, _, uly, _, dy = self.ds.GetGeoTransform()
+
+        # This gives the coords for the upper left corner of the pixel
         x_coord = ulx + dx * x_ind
         y_coord = uly + dy * y_ind
+        # Add dx/2 and dy/2 to get to the center of the pixel from the upper left corner
+        x_coord += dx / 2
+        y_coord += dy / 2  # recall that dy is negative
         return x_coord, y_coord
 
     def coord_to_node(self, x: float, y: float) -> int:
-        """Converts a coordinate pair to a node index"""
+        """Converts a coordinate pair to a node index. Returns the node index of the pixel that contains the coordinate"""
         nrows, ncols = self.arr.shape
         ulx, dx, _, uly, _, dy = self.ds.GetGeoTransform()
         x_ind = int((x - ulx) / dx)
+        # Casting to int rounds towards zero ('floor' for positive numbers; e.g, int(3.9) = 3)
         y_ind = int((y - uly) / dy)
         out = y_ind * ncols + x_ind
         if out > ncols * nrows or out < 0:
