@@ -9,27 +9,19 @@
   - [Testing](#testing)
 - [Usage](#usage)
     - [Examples](#examples)
-
+    - [Gallery](#gallery)
+-[Credit](#credit)
+-[Disclaimer](#disclaimer)
 
 ## Description
 
-This is a Python package for interfacing with Event Duration Monitoring (EDM) devices maintained by English (and Welsh!) Water Companies. This package was ostensibly developed to provide the back-end for [SewageMap.co.uk](https://github.com/AlexLipp/thames-sewage) but may be generically useful for those exploring the impact of sewage discharges on rivers. Currently, `POOPy` supports data from the following water companies: 
+This is a Python package for interfacing with live data from Event Duration Monitoring (EDM) devices maintained by English and Welsh Water Companies. This package was ostensibly developed to provide the back-end for [SewageMap.co.uk](https://github.com/AlexLipp/thames-sewage) but may be generically useful for those **exploring the impact of sewage discharges on rivers**. Currently, `POOPy` supports data from the following water companies: 
 - [Thames Water](https://github.com/AlexLipp/POOPy/blob/36491efea510162ce0db54472caa7daa5c1dd5b3/poopy/companies.py#L13)
 - [Welsh Water/Dŵr Cymru](https://github.com/AlexLipp/POOPy/blob/36491efea510162ce0db54472caa7daa5c1dd5b3/poopy/companies.py#L409)
 
-It can be used, for example to make figures like...
+Different water companies share their live EDM data via APIs with different formats. This is obviously confusing and means that **it is hard to access national data simultaneously** and ultimately understand their potential impact on the environment. `POOPy` solves this problem by **encapsulating** relevant information about EDM monitors maintained by different water companies into a **standardised interface**. This interface (represented by the `WaterCompany` and `Monitor` classes) makes it very easy to, for instance, quickly identify monitors that are discharging, have discharged in the last 48 hours or are offline. `POOPy` combines this information with **key meta-data about the monitor** such as location and the watercourse it discharges into. Additionally, `POOPy` provides a basic approache to explore the 'impact' of discharges on the environment, using a simple hydrological model to identify **river sections downstream of sewage discharges** in real-time. `POOPy` could easily be extended to consider more complicated ways of exploring the 'impact' of sewage spills (e.g., [dynamic river flow](https://github.com/AlexLipp/thames-sewage/issues/31)).
 
-... this one showing the stretches of the Thames downstream of active sewage discharges at the shown time...
-
-![map](https://github.com/AlexLipp/POOPy/assets/10188895/395732dc-54c1-403e-b681-be3bece7f7e7)
-
-...or this one which shows the discharge history of a specific monitor...
-
-![bourton_on_the_water](https://github.com/AlexLipp/POOPy/assets/10188895/feeb6035-78f0-4c48-b3f2-bd1d18f2ce96)
-
-...or this one which shows the number of live monitors deployed by Thames Water through time and whether they were discharging...
-
-![image](https://github.com/AlexLipp/POOPy/assets/10188895/8c631231-bf9c-406e-a393-4d1a72d355b3)
+Where historical information on CSO discharges are available, `POOPy` processes this information making it very **easy to query the spill history of a particular monitor**. For instance, to calculate the total hours of sewage discharge from a given monitor over a given timeframe. Experimentally, `POOPy` also has **capabilities to 'build' histories of sewage spills** from repeated queries to the current status of a monitor, _even if (in the case of most water companies) this information is not made readily accessible_.   
 
 ## Installation
 
@@ -93,3 +85,29 @@ from poopy.companies import ThamesWater
 Examples of how to use the package (using the `ThamesWater` class as an example) are given in the `examples` folder in the form of interactive python Jupyter noteboooks: 
 - [Investigating the *current* status of sewer overflow spilling](https://github.com/AlexLipp/POOPy/blob/main/examples/current_status.ipynb)
 - [Investigating the *historical* status of sewer overflow spilling](https://github.com/AlexLipp/POOPy/blob/main/examples/historical_status.ipynb)
+
+### Gallery
+
+`POOPy` can be used, for example to make figures like...
+
+... this one showing the stretches of the Thames downstream of active sewage discharges at the shown time...
+
+![map](https://github.com/AlexLipp/POOPy/assets/10188895/395732dc-54c1-403e-b681-be3bece7f7e7)
+
+...or this one which shows the discharge history of a specific monitor...
+
+![bourton_on_the_water](https://github.com/AlexLipp/POOPy/assets/10188895/feeb6035-78f0-4c48-b3f2-bd1d18f2ce96)
+
+...or this one which shows the number of live monitors deployed by Thames Water through time and whether they were discharging...
+
+![image](https://github.com/AlexLipp/POOPy/assets/10188895/8c631231-bf9c-406e-a393-4d1a72d355b3)
+
+
+## Credit
+
+If you use these scripts, or the data, please reference its source. For instance: 
+
+> "Data generated using the POOPy software (`github.com/AlexLipp/POOPy`)"
+
+## Disclaimer
+Whilst every effort has been made to ensure accuracy, this is experimental software and errors may occur and I assume no responsibility or liability for any such errors. If you see any issues please contact me, or raise an `Issue' above. This code is [licensed under the GNU General Public License 3.0](https://github.com/AlexLipp/poopy?tab=GPL-3.0-1-ov-file#readme)
