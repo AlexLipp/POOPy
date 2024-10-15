@@ -10,8 +10,8 @@
 - [Usage](#usage)
     - [Examples](#examples)
     - [Gallery](#gallery)
--[Credit](#credit)
--[Disclaimer](#disclaimer)
+- [Credit](#credit)
+- [Disclaimer](#disclaimer)
 
 ## Description
 
