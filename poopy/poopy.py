@@ -1375,7 +1375,7 @@ class WaterCompany(ABC):
                     # If the monitor is currently not in the alerts table, we add the current event to the alerts table.
                     # This might occur if a new monitor has been added to the network (or if the alerts table has been deleted)
                     print(
-                        f"Monitor {name} (currently {monitor.event.event_type}) had no previous recorded events so adding to alerts table..."
+                        f"Monitor {name} (currently {monitor.current_event.event_type}) had no previous recorded events so adding to alerts table..."
                     )
                     row = _make_start_alert_row(monitor)
                     alerts = pd.concat([row, alerts])
