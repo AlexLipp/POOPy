@@ -1588,7 +1588,7 @@ class WaterCompany(ABC):
                             # So, we do nothing but just add a note to the alert to say that a spill may have been missed.
                                     (
                                         print(
-                                            f"For monitor {monitor.site_name}, event type has changed from {prev_alert} to {new_alert} 
+                                            f"For monitor {monitor.site_name}, event type has changed from {prev_alert} to {new_alert} \
                                             which suggests that a spill may have been missed between {last_time} and {current_time}."
                                         )
                                         if verbose
