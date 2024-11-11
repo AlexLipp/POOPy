@@ -365,7 +365,7 @@ class Monitor:
         active = np.zeros(len(times), dtype=bool)
         recent = np.zeros(len(times), dtype=bool)
         """
-        Returns three boolean arrays that indicate, respectively, whether the monitor was online, active, 
+        Returns three boolean arrays that indicate, respectively, whether the monitor was online, active,
         or recently active (within 48 hours) at each time given in the times list. The times list should be
         regularly spaced in 15 minute intervals. The arrays are returned in the same order as the times list.
         This is a hidden method that is used by the get_monitor_timeseries() method in the WaterCompany class.
@@ -374,8 +374,8 @@ class Monitor:
             times: A list of times to check the monitor status at.
 
         Returns:
-            A tuple of three boolean arrays indicating whether the monitor was online, active, or recently active.  
-        
+            A tuple of three boolean arrays indicating whether the monitor was online, active, or recently active.
+
         """
 
         if len(self.history) == 0:
@@ -1499,10 +1499,14 @@ class WaterCompany(ABC):
                                 )
 
                             else:
+                                if monitor.current_event.start_time is None:
+                                    # If the monitor didnt have a start time we just make it now
+                                    start_time = datetime.datetime.now()
+                                else:
+                                    start_time = monitor.current_event.start_time
                                 off_stop = _make_offline_stop_alert_row(
                                     monitor,
-                                    monitor.current_event.start_time
-                                    - datetime.timedelta(seconds=1),
+                                    start_time - datetime.timedelta(seconds=1),
                                 )
                                 alerts = pd.concat([off_stop, alerts])
                                 (
@@ -1601,7 +1605,7 @@ class WaterCompany(ABC):
                                     alerts.at[row_index, "Note"] = (
                                         f"One or more discharge events may have been missed between {last_time} and {current_time}"
                                     )
-                        else:   
+                        else:
                             raise RuntimeError(
                                 f"For monitor {monitor.site_name}, event type has changed from {prev_alert} to {new_alert} but no corresponding action has been implemented."
                             )
