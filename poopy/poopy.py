@@ -1583,7 +1583,25 @@ class WaterCompany(ABC):
                                         f"One or more offline or discharge events may have been missed between {last_time} and {current_time}"
                                     )
                                     continue
-                        else:
+                        elif prev_alert == "Offline stop" and new_alert == "Stop":
+                            # If offline period has ended but latest event is a stop event it suggests that a spill has started and stopped (missed!).
+                            # So, we do nothing but just add a note to the alert to say that a spill may have been missed.
+                                    (
+                                        print(
+                                            f"For monitor {monitor.site_name}, event type has changed from {prev_alert} to {new_alert} 
+                                            which suggests that a spill may have been missed between {last_time} and {current_time}."
+                                        )
+                                        if verbose
+                                        else None
+                                    )
+                                    row_index = alerts[
+                                        alerts["LocationName"] == name
+                                    ].index[0]
+                                    # Modify the entry directly in the DataFrame
+                                    alerts.at[row_index, "Note"] = (
+                                        f"One or more discharge events may have been missed between {last_time} and {current_time}"
+                                    )
+                        else:   
                             raise RuntimeError(
                                 f"For monitor {monitor.site_name}, event type has changed from {prev_alert} to {new_alert} but no corresponding action has been implemented."
                             )
