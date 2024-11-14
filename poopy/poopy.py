@@ -1526,6 +1526,15 @@ class WaterCompany(ABC):
                                 else None
                             )
 
+                        elif prev_alert == "Offline stop" and new_alert == "Offline start":
+                            # Period of offline, followed by no discharge, then offline again. So, add offline start to alerts
+                            alerts = pd.concat([current_alert_row, alerts])
+                            (
+                                print(f"Monitor '{name}' has gone offline!")
+                                if verbose
+                                else None
+                            )
+
                         elif prev_alert == "Start" and new_alert == "Offline start":
                             # If discharge event followed by offline
                             # We need to add a "Stop" event before the Offline event starts
