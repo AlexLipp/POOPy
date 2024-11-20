@@ -30,7 +30,7 @@ class ThamesWater(WaterCompany):
     # and a long period of offline that follows.
 
     # The URL and hash of the D8 raster file on the server
-    D8_FILE_URL = "https://zenodo.org/records/13882300/files/thames_d8.nc?download=1"
+    D8_FILE_URL = "https://zenodo.org/records/14194018/files/thames_d8.nc?download=1"
     D8_FILE_HASH = "md5:1047a14906237cd436fd483e87c1647d"
 
     def __init__(self, clientID: str, clientSecret: str):
@@ -420,7 +420,7 @@ class WelshWater(WaterCompany):
     HISTORICAL_API_RESOURCE = ""
     API_LIMIT = 2000  # Max num of outputs that can be requested from the API at once
 
-    D8_FILE_URL = "https://zenodo.org/records/13882300/files/welsh_d8.nc?download=1"
+    D8_FILE_URL = "https://zenodo.org/records/14194018/files/welsh_d8.nc?download=1"
     D8_FILE_HASH = "md5:8c965ad0597929df3bc54bc728ed8404"
 
     def __init__(self, clientID="", clientSecret=""):
@@ -619,8 +619,8 @@ class SouthernWater(WaterCompany):
     HISTORICAL_API_RESOURCE = ""
     API_LIMIT = 1000  # Max num of outputs that can be requested from the API at once
 
-    D8_FILE_URL = ""
-    D8_FILE_HASH = ""
+    D8_FILE_URL = "https://zenodo.org/records/14194018/files/southern_d8.nc?download=1"
+    D8_FILE_HASH = "md5:4696dfce4e1c4cdc0479af03e6b38106"
 
     def __init__(self, clientID="", clientSecret=""):
         # No auth required for this API so no need to pass in clientID and clientSecret
