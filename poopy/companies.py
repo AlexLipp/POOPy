@@ -627,10 +627,10 @@ class SouthernWater(WaterCompany):
         print("\033[36m" + "Initialising Southern Water object..." + "\033[0m")
         super().__init__(clientID, clientSecret)
         self._name = "SouthernWater"
-        # self._d8_file_path = self._fetch_d8_file(
-        #     url=self.D8_FILE_URL,
-        #     known_hash=self.D8_FILE_HASH,
-        # )
+        self._d8_file_path = self._fetch_d8_file(
+            url=self.D8_FILE_URL,
+            known_hash=self.D8_FILE_HASH,
+        )
         self._alerts_table = f"{self._name}_alerts.csv"
         self._alerts_table_update_list = f"{self._name}_alerts_update_list.dat"
 
@@ -788,7 +788,7 @@ class SouthernWater(WaterCompany):
 
     def _row_to_event(self, row: pd.DataFrame, monitor: Monitor) -> Event:
         """
-        Convert a row of the Welsh Water active API response to an Event object. See `_fetch_current_status_df`
+        Convert a row of the Southern Water active API response to an Event object. See `_fetch_current_status_df`
         """
         if row["Status"] == 1:
             event = Discharge(
