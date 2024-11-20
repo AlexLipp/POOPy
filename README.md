@@ -16,8 +16,9 @@
 ## Description
 
 This is a Python package for interfacing with live data from Event Duration Monitoring (EDM) devices maintained by English and Welsh Water Companies. This package was ostensibly developed to provide the back-end for [SewageMap.co.uk](https://github.com/AlexLipp/thames-sewage) but may be generically useful for those **exploring the impact of sewage discharges on rivers**. Currently, `POOPy` supports data from the following water companies: 
-- [Thames Water](https://github.com/AlexLipp/POOPy/blob/36491efea510162ce0db54472caa7daa5c1dd5b3/poopy/companies.py#L13)
-- [Welsh Water/Dŵr Cymru](https://github.com/AlexLipp/POOPy/blob/36491efea510162ce0db54472caa7daa5c1dd5b3/poopy/companies.py#L409)
+- [Thames Water](https://github.com/AlexLipp/POOPy/blob/52d256408f8ab8ef2fc78fb3005f3609a043c962/poopy/companies.py#L13)
+- [Welsh Water/Dŵr Cymru](https://github.com/AlexLipp/POOPy/blob/52d256408f8ab8ef2fc78fb3005f3609a043c962/poopy/companies.py#L409)
+- [Southern Water](https://github.com/AlexLipp/POOPy/blob/52d256408f8ab8ef2fc78fb3005f3609a043c962/poopy/companies.py#L608)
 
 Different water companies share their live EDM data via APIs with different formats. This is obviously confusing and means that **it is hard to access national data simultaneously** and ultimately understand their potential impact on the environment. `POOPy` solves this problem by **encapsulating** relevant information about EDM monitors maintained by different water companies into a **standardised interface**. This interface (represented by the `WaterCompany` and `Monitor` classes) makes it very easy to, for instance, quickly identify monitors that are discharging, have discharged in the last 48 hours or are offline. `POOPy` combines this information with **key meta-data about the monitor** such as location and the watercourse it discharges into. Additionally, `POOPy` provides a basic approache to explore the 'impact' of discharges on the environment, using a simple hydrological model to identify **river sections downstream of sewage discharges** in real-time. `POOPy` could easily be extended to consider more complicated ways of exploring the 'impact' of sewage spills (e.g., [dynamic river flow](https://github.com/AlexLipp/thames-sewage/issues/31)).
 
