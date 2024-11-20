@@ -776,13 +776,19 @@ class SouthernWater(WaterCompany):
                 f"Status is not 0 or 1 for monitor {row['Id']}. Status is {row['Status']}"
             )
 
+        # Parse row["ReceivingWaterCourse"] to a string, including when it is None
+        if pd.isna(row["ReceivingWaterCourse"]):
+            receiving_watercourse = "Unknown"
+        else:
+            receiving_watercourse = row["ReceivingWaterCourse"]
+
         return Monitor(
             site_name=row["Id"],  # Southern Water does not provide a site name
             permit_number="Unknown",  # Assuming that the permit number is the ID
             x_coord=x,
             y_coord=y,
-            receiving_watercourse=row["ReceivingWaterCourse"],
-            water_company="dummy",
+            receiving_watercourse=receiving_watercourse,
+            water_company=self,
             discharge_in_last_48h=last_48h,
         )
 
