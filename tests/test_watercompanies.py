@@ -4,7 +4,7 @@ import warnings
 
 from numpy import isnan
 
-from poopy.companies import ThamesWater, WelshWater, SouthernWater
+from poopy.companies import ThamesWater, WelshWater, SouthernWater, AnglianWater
 from poopy.poopy import Monitor, WaterCompany, Event
 
 # Retrieve Thames Water API credentials from environment variables
@@ -157,3 +157,19 @@ def test_welsh_water_init():
     assert ww.accumulator.extent == [159975.0, 499975.0, 160025.0, 400025.0]
     # Now test the rest of the object which is common to all WaterCompany objects
     check_watercompany(ww)
+
+
+def test_anglian_water_init():
+    """
+    Test the basic initialization of a AnglianWater object
+    """
+
+    aw = AnglianWater()
+    assert aw.name == "AnglianWater"
+    assert aw.clientID == ""
+    assert aw.clientSecret == ""
+
+    # Check that the accumulator is initialized correctly with the correct extent (in OSGB)
+    assert aw.accumulator.extent == [439975.0, 659975.0, 170025.0, 430025.0]
+    # Now test the rest of the object which is common to all WaterCompany objects
+    check_watercompany(aw)
