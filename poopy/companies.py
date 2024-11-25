@@ -751,7 +751,7 @@ class SouthernWater(WaterCompany):
 
         # if row["latestEventEnd"] is not nan, convert it to datetime, else set it to None
         if not pd.isna(row["LatestEventEnd"]):
-            last_event_end = datetime.utcfromtimestamp(row["LatestEventEnd"] / 1000)
+            last_event_end = pd.to_datetime(row["LatestEventEnd"], unit="ms")
         else:
             last_event_end = None
 
@@ -800,13 +800,13 @@ class SouthernWater(WaterCompany):
             event = Discharge(
                 monitor=monitor,
                 ongoing=True,
-                start_time=datetime.utcfromtimestamp(row["StatusStart"] / 1000),
+                start_time=pd.to_datetime(row["StatusStart"], unit="ms"),
             )
         elif row["Status"] == 0:
             event = NoDischarge(
                 monitor=monitor,
                 ongoing=True,
-                start_time=datetime.utcfromtimestamp(row["StatusStart"] / 1000),
+                start_time=pd.to_datetime(row["StatusStart"], unit="ms"),
             )
         else:
             raise Exception(
