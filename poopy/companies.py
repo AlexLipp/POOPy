@@ -30,7 +30,7 @@ class ThamesWater(WaterCompany):
     # and a long period of offline that follows.
 
     # The URL and hash of the D8 raster file on the server
-    D8_FILE_URL = "https://zenodo.org/records/14194018/files/thames_d8.nc?download=1"
+    D8_FILE_URL = "https://zenodo.org/records/14219156/files/thames_d8.nc?download=1"
     D8_FILE_HASH = "md5:1047a14906237cd436fd483e87c1647d"
 
     def __init__(self, clientID: str, clientSecret: str):
@@ -420,7 +420,7 @@ class WelshWater(WaterCompany):
     HISTORICAL_API_RESOURCE = ""
     API_LIMIT = 2000  # Max num of outputs that can be requested from the API at once
 
-    D8_FILE_URL = "https://zenodo.org/records/14194018/files/welsh_d8.nc?download=1"
+    D8_FILE_URL = "https://zenodo.org/records/14219156/files/welsh_d8.nc?download=1"
     D8_FILE_HASH = "md5:8c965ad0597929df3bc54bc728ed8404"
 
     def __init__(self, clientID="", clientSecret=""):
@@ -619,7 +619,7 @@ class SouthernWater(WaterCompany):
     HISTORICAL_API_RESOURCE = ""
     API_LIMIT = 1000  # Max num of outputs that can be requested from the API at once
 
-    D8_FILE_URL = "https://zenodo.org/records/14194018/files/southern_d8.nc?download=1"
+    D8_FILE_URL = "https://zenodo.org/records/14219156/files/southern_d8.nc?download=1"
     D8_FILE_HASH = "md5:4696dfce4e1c4cdc0479af03e6b38106"
 
     def __init__(self, clientID="", clientSecret=""):
@@ -649,7 +649,7 @@ class SouthernWater(WaterCompany):
             "where": "1=1",
             "f": "json",
             "resultOffset": 0,
-            "resultRecordCount": 1000,  # Adjust the limit as needed
+            "resultRecordCount": self.API_LIMIT,  # Adjust the limit as needed
         }
         df = self._handle_current_api_response(url=url, params=params)
 
@@ -809,6 +809,224 @@ class SouthernWater(WaterCompany):
                 start_time=pd.to_datetime(row["StatusStart"], unit="ms"),
             )
         else:
+            raise Exception(
+                "Unknown status type " + row["Status"] + " for monitor " + row["Id"]
+            )
+        return event
+
+
+class AnglianWater(WaterCompany):
+    """
+    Creates an object to interact with the AnglianWater EDM API.
+    There is no auth on this endpoint required currently.
+    There is only a current status endpoint, no historical endpoint available.
+    """
+
+    API_ROOT = "https://services3.arcgis.com/VCOY1atHWVcDlvlJ/arcgis/rest/services/"
+    CURRENT_API_RESOURCE = "stream_service_outfall_locations_view/FeatureServer/0/query"
+    HISTORICAL_API_RESOURCE = ""
+    API_LIMIT = 1000  # Max num of outputs that can be requested from the API at once
+
+    D8_FILE_URL = "https://zenodo.org/records/14219156/files/anglian_d8.nc?download=1"
+    D8_FILE_HASH = "md5:a053da23a0305b36856f38f4a5e59e10"
+
+    def __init__(self, clientID="", clientSecret=""):
+        # No auth required for this API so no need to pass in clientID and clientSecret
+        print("\033[36m" + "Initialising Anglian Water object..." + "\033[0m")
+        super().__init__(clientID, clientSecret)
+        self._name = "AnglianWater"
+        self._d8_file_path = self._fetch_d8_file(
+            url=self.D8_FILE_URL,
+            known_hash=self.D8_FILE_HASH,
+        )
+        self._alerts_table = f"{self._name}_alerts.csv"
+        self._alerts_table_update_list = f"{self._name}_alerts_update_list.dat"
+
+    def _fetch_current_status_df(self) -> pd.DataFrame:
+        """
+        Get the current status of the monitors by calling the API.
+        """
+        print(
+            "\033[36m"
+            + "Requesting current status data from Anglian Water API..."
+            + "\033[0m"
+        )
+        url = self.API_ROOT + self.CURRENT_API_RESOURCE
+        params = {
+            "outFields": "*",
+            "where": "1=1",
+            "f": "json",
+            "resultOffset": 0,
+            "resultRecordCount": self.API_LIMIT,  # Adjust the limit as needed
+        }
+        df = self._handle_current_api_response(url=url, params=params)
+
+        return df
+
+    def _handle_current_api_response(
+        self, url: str, params: str, verbose: bool = False
+    ) -> pd.DataFrame:
+        """
+        Creates and handles the response from the API. If the response is valid, return a dataframe of the response.
+        Otherwise, raise an exception. This is a helper function for the `_fetch_current_status_df` and `_fetch_monitor_history_df` functions.
+        Loops through the API calls until all the records are fetched. If verbose is set to True, the function will print the full dataframe
+        to the console.
+        """
+        df = pd.DataFrame()
+        while True:
+            response = requests.get(url, params=params)
+            print("\033[36m" + "\tRequesting from " + response.url + "\033[0m")
+
+            # Check if the request was successful
+            if response.status_code == 200:
+                data = response.json()
+                # If no features are returned, break the loop
+                if "features" not in data or not data["features"]:
+                    print("\033[36m" + "\tNo more records to fetch" + "\033[0m")
+                    break
+                else:
+                    # Extract attributes from the JSON response
+                    attributes = [feature["attributes"] for feature in data["features"]]
+                    # Convert the attributes to a DataFrame
+                    df_temp = pd.DataFrame(attributes)
+                    df = pd.concat([df, df_temp], ignore_index=True)
+            else:
+                raise Exception(
+                    "\tRequest failed with status code {0}, and error message: {1}".format(
+                        response.status_code, response.json()
+                    )
+                )
+
+            # Increment offset for the next request
+            params["resultOffset"] += params["resultRecordCount"]
+
+        # Print the full dataframe to the console if verbose is set to True
+        if verbose:
+            print("\033[36m" + "\tPrinting full API response..." + "\033[0m")
+            with pd.option_context(
+                "display.max_rows", None, "display.max_columns", None
+            ):
+                print(df)
+
+        return df
+
+    def _fetch_active_monitors(self) -> Dict[str, Monitor]:
+        """
+        Returns a dictionary of Monitor objects representing the active monitors.
+        """
+        df = self._fetch_current_status_df()
+        monitors = {}
+        for _, row in df.iterrows():
+            monitor = self._row_to_monitor(row=row)
+            event = self._row_to_event(row=row, monitor=monitor)
+            monitor.current_event = event
+            monitors[monitor.site_name] = monitor
+        return monitors
+
+    def _fetch_monitor_history(self, monitor: Monitor) -> List[Event]:
+        """
+        Not available for Anglian Water API.
+        """
+        print(
+            "\033[36m"
+            + "This function is not available for the Anglian Water API."
+            + "\033[0m"
+        )
+        pass
+        return
+
+    def set_all_histories(self) -> None:
+        """
+        Not available for Anglian Water API.
+        """
+        print(
+            "\033[36m"
+            + "This function is not available for the Anglian Water API."
+            + "\033[0m"
+        )
+        pass
+        return
+
+    def _row_to_monitor(self, row: pd.DataFrame) -> Monitor:
+        """
+        Convert a row of the Anglian Water active API response to a Monitor object. See `_fetch_current_status_df`
+        """
+        current_time = (
+            self._timestamp
+        )  # Get the current time which corresponds to when the API was called (so it is same for all monitors)
+
+        x, y = latlong_to_osgb(row["Latitude"], row["Longitude"])
+
+        # if row["latestEventEnd"] is not nan, convert it to datetime, else set it to None
+        if not pd.isna(row["LatestEventEnd"]):
+            last_event_end = pd.to_datetime(row["LatestEventEnd"], unit="ms")
+        else:
+            last_event_end = None
+
+        # if monitor currently discharging we set last_48h to be True.
+        if row["Status"] == 1:
+            last_48h = True
+
+        # if monitor not currently discharging, we check if it has discharged in the last 48 hours
+        elif row["Status"] == 0:
+            # If last_event_end is within the last 48 hours, set last_48h to be True
+            if (
+                last_event_end is not None
+                and last_event_end > current_time - timedelta(days=2)
+            ):
+                last_48h = True
+            # If last_event_end is more than 48 hours ago, or undefined, set last_48h to be False
+            else:
+                last_48h = False
+        else:
+            # Raise an exception if the status is not 0 or 1
+            raise Exception(
+                f"Status is not 0 or 1 for monitor {row['Id']}. Status is {row['Status']}"
+            )
+
+        # Parse row["ReceivingWaterCourse"] to a string, including when it is None
+        if pd.isna(row["ReceivingWaterCourse"]):
+            receiving_watercourse = "Unknown"
+        else:
+            receiving_watercourse = row["ReceivingWaterCourse"]
+
+        return Monitor(
+            site_name=row["Id"],  # Anglian Water does not provide a site name
+            permit_number="Unknown",  # Assuming that the permit number is the ID
+            x_coord=x,
+            y_coord=y,
+            receiving_watercourse=receiving_watercourse,
+            water_company=self,
+            discharge_in_last_48h=last_48h,
+        )
+
+    def _row_to_event(self, row: pd.DataFrame, monitor: Monitor) -> Event:
+        """
+        Convert a row of the Anglian Water active API response to an Event object. See `_fetch_current_status_df`
+        """
+        if row["Status"] == 1:
+            event = Discharge(
+                monitor=monitor,
+                ongoing=True,
+                start_time=pd.to_datetime(row["LatestEventStart"], unit="ms"),
+            )
+        elif row["Status"] == 0:
+            last_event_end = pd.to_datetime(row["LatestEventEnd"], unit="ms")
+            # If event_end is NaT update event_end to be None. This is normally because the monitor is yet
+            # to have a discharge event. So, cannot sensibly record the start time of the no discharge event.
+            # if row["latestEventEnd"] is not nan, convert it to datetime, else set it to None
+            if not pd.isna(row["LatestEventEnd"]):
+                last_event_end = pd.to_datetime(row["LatestEventEnd"], unit="ms")
+            else:
+                last_event_end = None
+            event = NoDischarge(
+                monitor=monitor,
+                ongoing=True,
+                # Assume the the period of no discharge is from the end of the last event to the current time
+                start_time=last_event_end,
+            )
+        else:
+            # Raise an exception if the status is not 0 or 1 (should not happen!)
             raise Exception(
                 "Unknown status type " + row["Status"] + " for monitor " + row["Id"]
             )
