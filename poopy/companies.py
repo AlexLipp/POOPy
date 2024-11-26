@@ -325,19 +325,6 @@ class ThamesWater(WaterCompany):
         df.reset_index(drop=True, inplace=True)
         return df
 
-    def _fetch_active_monitors(self) -> Dict[str, Monitor]:
-        """
-        Returns a dictionary of Monitor objects representing the active monitors.
-        """
-        df = self._fetch_current_status_df()
-        monitors = {}
-        for _, row in df.iterrows():
-            monitor = self._row_to_monitor(row=row)
-            event = self._row_to_event(row=row, monitor=monitor)
-            monitor.current_event = event
-            monitors[monitor.site_name] = monitor
-        return monitors
-
     def _fetch_monitor_history(
         self, monitor: Monitor, verbose: bool = False
     ) -> List[Event]:
@@ -496,19 +483,6 @@ class WelshWater(WaterCompany):
                 + "\033[0m"
             )
         return df
-
-    def _fetch_active_monitors(self) -> Dict[str, Monitor]:
-        """
-        Returns a dictionary of Monitor objects representing the active monitors.
-        """
-        df = self._fetch_current_status_df()
-        monitors = {}
-        for _, row in df.iterrows():
-            monitor = self._row_to_monitor(row=row)
-            event = self._row_to_event(row=row, monitor=monitor)
-            monitor.current_event = event
-            monitors[monitor.site_name] = monitor
-        return monitors
 
     def _fetch_monitor_history(self, monitor: Monitor) -> List[Event]:
         """
@@ -701,19 +675,6 @@ class SouthernWater(WaterCompany):
                 print(df)
 
         return df
-
-    def _fetch_active_monitors(self) -> Dict[str, Monitor]:
-        """
-        Returns a dictionary of Monitor objects representing the active monitors.
-        """
-        df = self._fetch_current_status_df()
-        monitors = {}
-        for _, row in df.iterrows():
-            monitor = self._row_to_monitor(row=row)
-            event = self._row_to_event(row=row, monitor=monitor)
-            monitor.current_event = event
-            monitors[monitor.site_name] = monitor
-        return monitors
 
     def _fetch_monitor_history(self, monitor: Monitor) -> List[Event]:
         """
@@ -909,19 +870,6 @@ class AnglianWater(WaterCompany):
                 print(df)
 
         return df
-
-    def _fetch_active_monitors(self) -> Dict[str, Monitor]:
-        """
-        Returns a dictionary of Monitor objects representing the active monitors.
-        """
-        df = self._fetch_current_status_df()
-        monitors = {}
-        for _, row in df.iterrows():
-            monitor = self._row_to_monitor(row=row)
-            event = self._row_to_event(row=row, monitor=monitor)
-            monitor.current_event = event
-            monitors[monitor.site_name] = monitor
-        return monitors
 
     def _fetch_monitor_history(self, monitor: Monitor) -> List[Event]:
         """

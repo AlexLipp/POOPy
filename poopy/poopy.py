@@ -675,16 +675,6 @@ class WaterCompany(ABC):
         )
 
     @abstractmethod
-    def _fetch_active_monitors(self) -> Dict[str, Monitor]:
-        """
-        Get the current status of the monitors by calling the API.
-
-        Returns:
-            A dictionary of active monitors accessed by site name.
-        """
-        pass
-
-    @abstractmethod
     def _fetch_monitor_history(self, monitor: Monitor) -> List[Event]:
         """
         Get the history of events for a monitor.
@@ -703,6 +693,19 @@ class WaterCompany(ABC):
         Sets the historical data for all active monitors and store it in the history attribute of each monitor.
         """
         pass
+
+    def _fetch_active_monitors(self) -> Dict[str, Monitor]:
+        """
+        Returns a dictionary of Monitor objects representing the active monitors.
+        """
+        df = self._fetch_current_status_df()
+        monitors = {}
+        for _, row in df.iterrows():
+            monitor = self._row_to_monitor(row=row)
+            event = self._row_to_event(row=row, monitor=monitor)
+            monitor.current_event = event
+            monitors[monitor.site_name] = monitor
+        return monitors
 
     def build_all_histories_locally(self) -> None:
         """
