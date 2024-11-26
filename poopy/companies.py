@@ -35,8 +35,8 @@ class ThamesWater(WaterCompany):
 
     def __init__(self, clientID: str, clientSecret: str):
         print("\033[36m" + "Initialising Thames Water object..." + "\033[0m")
-        super().__init__(clientID, clientSecret)
         self._name = "ThamesWater"
+        super().__init__(clientID, clientSecret)
         self._d8_file_path = self._fetch_d8_file(
             url=self.D8_FILE_URL,
             known_hash=self.D8_FILE_HASH,
@@ -413,8 +413,8 @@ class WelshWater(WaterCompany):
     def __init__(self, clientID="", clientSecret=""):
         # No auth required for this API so no need to pass in clientID and clientSecret
         print("\033[36m" + "Initialising Welsh Water object..." + "\033[0m")
-        super().__init__(clientID, clientSecret)
         self._name = "WelshWater"
+        super().__init__(clientID, clientSecret)
         self._d8_file_path = self._fetch_d8_file(
             url=self.D8_FILE_URL,
             known_hash=self.D8_FILE_HASH,
@@ -599,82 +599,14 @@ class SouthernWater(WaterCompany):
     def __init__(self, clientID="", clientSecret=""):
         # No auth required for this API so no need to pass in clientID and clientSecret
         print("\033[36m" + "Initialising Southern Water object..." + "\033[0m")
-        super().__init__(clientID, clientSecret)
         self._name = "SouthernWater"
+        super().__init__(clientID, clientSecret)
         self._d8_file_path = self._fetch_d8_file(
             url=self.D8_FILE_URL,
             known_hash=self.D8_FILE_HASH,
         )
         self._alerts_table = f"{self._name}_alerts.csv"
         self._alerts_table_update_list = f"{self._name}_alerts_update_list.dat"
-
-    def _fetch_current_status_df(self) -> pd.DataFrame:
-        """
-        Get the current status of the monitors by calling the API.
-        """
-        print(
-            "\033[36m"
-            + "Requesting current status data from Southern Water API..."
-            + "\033[0m"
-        )
-        url = self.API_ROOT + self.CURRENT_API_RESOURCE
-        params = {
-            "outFields": "*",
-            "where": "1=1",
-            "f": "json",
-            "resultOffset": 0,
-            "resultRecordCount": self.API_LIMIT,  # Adjust the limit as needed
-        }
-        df = self._handle_current_api_response(url=url, params=params)
-
-        return df
-
-    def _handle_current_api_response(
-        self, url: str, params: str, verbose: bool = False
-    ) -> pd.DataFrame:
-        """
-        Creates and handles the response from the API. If the response is valid, return a dataframe of the response.
-        Otherwise, raise an exception. This is a helper function for the `_fetch_current_status_df` and `_fetch_monitor_history_df` functions.
-        Loops through the API calls until all the records are fetched. If verbose is set to True, the function will print the full dataframe
-        to the console.
-        """
-        df = pd.DataFrame()
-        while True:
-            response = requests.get(url, params=params)
-            print("\033[36m" + "\tRequesting from " + response.url + "\033[0m")
-
-            # Check if the request was successful
-            if response.status_code == 200:
-                data = response.json()
-                # If no features are returned, break the loop
-                if "features" not in data or not data["features"]:
-                    print("\033[36m" + "\tNo more records to fetch" + "\033[0m")
-                    break
-                else:
-                    # Extract attributes from the JSON response
-                    attributes = [feature["attributes"] for feature in data["features"]]
-                    # Convert the attributes to a DataFrame
-                    df_temp = pd.DataFrame(attributes)
-                    df = pd.concat([df, df_temp], ignore_index=True)
-            else:
-                raise Exception(
-                    "\tRequest failed with status code {0}, and error message: {1}".format(
-                        response.status_code, response.json()
-                    )
-                )
-
-            # Increment offset for the next request
-            params["resultOffset"] += params["resultRecordCount"]
-
-        # Print the full dataframe to the console if verbose is set to True
-        if verbose:
-            print("\033[36m" + "\tPrinting full API response..." + "\033[0m")
-            with pd.option_context(
-                "display.max_rows", None, "display.max_columns", None
-            ):
-                print(df)
-
-        return df
 
     def _fetch_monitor_history(self, monitor: Monitor) -> List[Event]:
         """
@@ -794,82 +726,14 @@ class AnglianWater(WaterCompany):
     def __init__(self, clientID="", clientSecret=""):
         # No auth required for this API so no need to pass in clientID and clientSecret
         print("\033[36m" + "Initialising Anglian Water object..." + "\033[0m")
-        super().__init__(clientID, clientSecret)
         self._name = "AnglianWater"
+        super().__init__(clientID, clientSecret)
         self._d8_file_path = self._fetch_d8_file(
             url=self.D8_FILE_URL,
             known_hash=self.D8_FILE_HASH,
         )
         self._alerts_table = f"{self._name}_alerts.csv"
         self._alerts_table_update_list = f"{self._name}_alerts_update_list.dat"
-
-    def _fetch_current_status_df(self) -> pd.DataFrame:
-        """
-        Get the current status of the monitors by calling the API.
-        """
-        print(
-            "\033[36m"
-            + "Requesting current status data from Anglian Water API..."
-            + "\033[0m"
-        )
-        url = self.API_ROOT + self.CURRENT_API_RESOURCE
-        params = {
-            "outFields": "*",
-            "where": "1=1",
-            "f": "json",
-            "resultOffset": 0,
-            "resultRecordCount": self.API_LIMIT,  # Adjust the limit as needed
-        }
-        df = self._handle_current_api_response(url=url, params=params)
-
-        return df
-
-    def _handle_current_api_response(
-        self, url: str, params: str, verbose: bool = False
-    ) -> pd.DataFrame:
-        """
-        Creates and handles the response from the API. If the response is valid, return a dataframe of the response.
-        Otherwise, raise an exception. This is a helper function for the `_fetch_current_status_df` and `_fetch_monitor_history_df` functions.
-        Loops through the API calls until all the records are fetched. If verbose is set to True, the function will print the full dataframe
-        to the console.
-        """
-        df = pd.DataFrame()
-        while True:
-            response = requests.get(url, params=params)
-            print("\033[36m" + "\tRequesting from " + response.url + "\033[0m")
-
-            # Check if the request was successful
-            if response.status_code == 200:
-                data = response.json()
-                # If no features are returned, break the loop
-                if "features" not in data or not data["features"]:
-                    print("\033[36m" + "\tNo more records to fetch" + "\033[0m")
-                    break
-                else:
-                    # Extract attributes from the JSON response
-                    attributes = [feature["attributes"] for feature in data["features"]]
-                    # Convert the attributes to a DataFrame
-                    df_temp = pd.DataFrame(attributes)
-                    df = pd.concat([df, df_temp], ignore_index=True)
-            else:
-                raise Exception(
-                    "\tRequest failed with status code {0}, and error message: {1}".format(
-                        response.status_code, response.json()
-                    )
-                )
-
-            # Increment offset for the next request
-            params["resultOffset"] += params["resultRecordCount"]
-
-        # Print the full dataframe to the console if verbose is set to True
-        if verbose:
-            print("\033[36m" + "\tPrinting full API response..." + "\033[0m")
-            with pd.option_context(
-                "display.max_rows", None, "display.max_columns", None
-            ):
-                print(df)
-
-        return df
 
     def _fetch_monitor_history(self, monitor: Monitor) -> List[Event]:
         """
@@ -999,82 +863,14 @@ class WessexWater(WaterCompany):
     def __init__(self, clientID="", clientSecret=""):
         # No auth required for this API so no need to pass in clientID and clientSecret
         print("\033[36m" + "Initialising Wessex Water object..." + "\033[0m")
-        super().__init__(clientID, clientSecret)
         self._name = "WessexWater"
+        super().__init__(clientID, clientSecret)
         # self._d8_file_path = self._fetch_d8_file(
         #     url=self.D8_FILE_URL,
         #     known_hash=self.D8_FILE_HASH,
         # )
         self._alerts_table = f"{self._name}_alerts.csv"
         self._alerts_table_update_list = f"{self._name}_alerts_update_list.dat"
-
-    def _fetch_current_status_df(self) -> pd.DataFrame:
-        """
-        Get the current status of the monitors by calling the API.
-        """
-        print(
-            "\033[36m"
-            + "Requesting current status data from Wessex Water API..."
-            + "\033[0m"
-        )
-        url = self.API_ROOT + self.CURRENT_API_RESOURCE
-        params = {
-            "outFields": "*",
-            "where": "1=1",
-            "f": "json",
-            "resultOffset": 0,
-            "resultRecordCount": self.API_LIMIT,  # Adjust the limit as needed
-        }
-        df = self._handle_current_api_response(url=url, params=params)
-
-        return df
-
-    def _handle_current_api_response(
-        self, url: str, params: str, verbose: bool = False
-    ) -> pd.DataFrame:
-        """
-        Creates and handles the response from the API. If the response is valid, return a dataframe of the response.
-        Otherwise, raise an exception. This is a helper function for the `_fetch_current_status_df` and `_fetch_monitor_history_df` functions.
-        Loops through the API calls until all the records are fetched. If verbose is set to True, the function will print the full dataframe
-        to the console.
-        """
-        df = pd.DataFrame()
-        while True:
-            response = requests.get(url, params=params)
-            print("\033[36m" + "\tRequesting from " + response.url + "\033[0m")
-
-            # Check if the request was successful
-            if response.status_code == 200:
-                data = response.json()
-                # If no features are returned, break the loop
-                if "features" not in data or not data["features"]:
-                    print("\033[36m" + "\tNo more records to fetch" + "\033[0m")
-                    break
-                else:
-                    # Extract attributes from the JSON response
-                    attributes = [feature["attributes"] for feature in data["features"]]
-                    # Convert the attributes to a DataFrame
-                    df_temp = pd.DataFrame(attributes)
-                    df = pd.concat([df, df_temp], ignore_index=True)
-            else:
-                raise Exception(
-                    "\tRequest failed with status code {0}, and error message: {1}".format(
-                        response.status_code, response.json()
-                    )
-                )
-
-            # Increment offset for the next request
-            params["resultOffset"] += params["resultRecordCount"]
-
-        # Print the full dataframe to the console if verbose is set to True
-        if verbose:
-            print("\033[36m" + "\tPrinting full API response..." + "\033[0m")
-            with pd.option_context(
-                "display.max_rows", None, "display.max_columns", None
-            ):
-                print(df)
-
-        return df
 
     def _fetch_monitor_history(self, monitor: Monitor) -> List[Event]:
         """

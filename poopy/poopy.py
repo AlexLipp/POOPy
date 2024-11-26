@@ -3,6 +3,7 @@ import warnings
 from abc import ABC, abstractmethod
 from typing import Dict, List, Optional, Union, Tuple
 import os
+import requests
 
 import matplotlib.pyplot as plt
 import numpy as np
@@ -663,7 +664,6 @@ class WaterCompany(ABC):
             clientID: The client ID for the Water Company API.
             clientSecret: The client secret for the Water Company API.
         """
-        self._name: str = None
         self._clientID = clientID
         self._clientSecret = clientSecret
         self._timestamp: datetime.datetime = datetime.datetime.now()
@@ -693,6 +693,74 @@ class WaterCompany(ABC):
         Sets the historical data for all active monitors and store it in the history attribute of each monitor.
         """
         pass
+
+    def _fetch_current_status_df(self) -> pd.DataFrame:
+        """
+        Get the current status of the monitors by calling the API.
+        """
+        print(
+            "\033[36m"
+            + f"Requesting current status data from {self.name} API..."
+            + "\033[0m"
+        )
+        url = self.API_ROOT + self.CURRENT_API_RESOURCE
+        params = {
+            "outFields": "*",
+            "where": "1=1",
+            "f": "json",
+            "resultOffset": 0,
+            "resultRecordCount": self.API_LIMIT,  # Adjust the limit as needed
+        }
+        df = self._handle_current_api_response(url=url, params=params)
+
+        return df
+
+    def _handle_current_api_response(
+        self, url: str, params: str, verbose: bool = False
+    ) -> pd.DataFrame:
+        """
+        Creates and handles the response from the API. If the response is valid, return a dataframe of the response.
+        Otherwise, raise an exception. This is a helper function for the `_fetch_current_status_df` and `_fetch_monitor_history_df` functions.
+        Loops through the API calls until all the records are fetched. If verbose is set to True, the function will print the full dataframe
+        to the console.
+        """
+        df = pd.DataFrame()
+        while True:
+            response = requests.get(url, params=params)
+            print("\033[36m" + "\tRequesting from " + response.url + "\033[0m")
+
+            # Check if the request was successful
+            if response.status_code == 200:
+                data = response.json()
+                # If no features are returned, break the loop
+                if "features" not in data or not data["features"]:
+                    print("\033[36m" + "\tNo more records to fetch" + "\033[0m")
+                    break
+                else:
+                    # Extract attributes from the JSON response
+                    attributes = [feature["attributes"] for feature in data["features"]]
+                    # Convert the attributes to a DataFrame
+                    df_temp = pd.DataFrame(attributes)
+                    df = pd.concat([df, df_temp], ignore_index=True)
+            else:
+                raise Exception(
+                    "\tRequest failed with status code {0}, and error message: {1}".format(
+                        response.status_code, response.json()
+                    )
+                )
+
+            # Increment offset for the next request
+            params["resultOffset"] += params["resultRecordCount"]
+
+        # Print the full dataframe to the console if verbose is set to True
+        if verbose:
+            print("\033[36m" + "\tPrinting full API response..." + "\033[0m")
+            with pd.option_context(
+                "display.max_rows", None, "display.max_columns", None
+            ):
+                print(df)
+
+        return df
 
     def _fetch_active_monitors(self) -> Dict[str, Monitor]:
         """
@@ -1529,7 +1597,10 @@ class WaterCompany(ABC):
                                 else None
                             )
 
-                        elif prev_alert == "Offline stop" and new_alert == "Offline start":
+                        elif (
+                            prev_alert == "Offline stop"
+                            and new_alert == "Offline start"
+                        ):
                             # Period of offline, followed by no discharge, then offline again. So, add offline start to alerts
                             alerts = pd.concat([current_alert_row, alerts])
                             (
@@ -1602,21 +1673,19 @@ class WaterCompany(ABC):
                         elif prev_alert == "Offline stop" and new_alert == "Stop":
                             # If offline period has ended but latest event is a stop event it suggests that a spill has started and stopped (missed!).
                             # So, we do nothing but just add a note to the alert to say that a spill may have been missed.
-                                    (
-                                        print(
-                                            f"For monitor {monitor.site_name}, event type has changed from {prev_alert} to {new_alert} \
+                            (
+                                print(
+                                    f"For monitor {monitor.site_name}, event type has changed from {prev_alert} to {new_alert} \
                                             which suggests that a spill may have been missed between {last_time} and {current_time}."
-                                        )
-                                        if verbose
-                                        else None
-                                    )
-                                    row_index = alerts[
-                                        alerts["LocationName"] == name
-                                    ].index[0]
-                                    # Modify the entry directly in the DataFrame
-                                    alerts.at[row_index, "Note"] = (
-                                        f"One or more discharge events may have been missed between {last_time} and {current_time}"
-                                    )
+                                )
+                                if verbose
+                                else None
+                            )
+                            row_index = alerts[alerts["LocationName"] == name].index[0]
+                            # Modify the entry directly in the DataFrame
+                            alerts.at[row_index, "Note"] = (
+                                f"One or more discharge events may have been missed between {last_time} and {current_time}"
+                            )
                         else:
                             raise RuntimeError(
                                 f"For monitor {monitor.site_name}, event type has changed from {prev_alert} to {new_alert} but no corresponding action has been implemented."
