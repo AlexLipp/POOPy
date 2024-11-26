@@ -30,7 +30,7 @@ class ThamesWater(WaterCompany):
     # and a long period of offline that follows.
 
     # The URL and hash of the D8 raster file on the server
-    D8_FILE_URL = "https://zenodo.org/records/14219156/files/thames_d8.nc?download=1"
+    D8_FILE_URL = "https://zenodo.org/records/14225298/files/thames_d8.nc?download=1"
     D8_FILE_HASH = "md5:1047a14906237cd436fd483e87c1647d"
 
     def __init__(self, clientID: str, clientSecret: str):
@@ -407,7 +407,7 @@ class WelshWater(WaterCompany):
     HISTORICAL_API_RESOURCE = ""
     API_LIMIT = 2000  # Max num of outputs that can be requested from the API at once
 
-    D8_FILE_URL = "https://zenodo.org/records/14219156/files/welsh_d8.nc?download=1"
+    D8_FILE_URL = "https://zenodo.org/records/14225298/files/welsh_d8.nc?download=1"
     D8_FILE_HASH = "md5:8c965ad0597929df3bc54bc728ed8404"
 
     def __init__(self, clientID="", clientSecret=""):
@@ -593,7 +593,7 @@ class SouthernWater(WaterCompany):
     HISTORICAL_API_RESOURCE = ""
     API_LIMIT = 1000  # Max num of outputs that can be requested from the API at once
 
-    D8_FILE_URL = "https://zenodo.org/records/14219156/files/southern_d8.nc?download=1"
+    D8_FILE_URL = "https://zenodo.org/records/14225298/files/southern_d8.nc?download=1"
     D8_FILE_HASH = "md5:4696dfce4e1c4cdc0479af03e6b38106"
 
     def __init__(self, clientID="", clientSecret=""):
@@ -693,13 +693,22 @@ class SouthernWater(WaterCompany):
             event = Discharge(
                 monitor=monitor,
                 ongoing=True,
-                start_time=pd.to_datetime(row["StatusStart"], unit="ms"),
+                # We assume that the start of the discharge event is the start of the latest event. The "StatusStart" field seems unreliable.
+                start_time=pd.to_datetime(row["LatestEventStart"], unit="ms"),
             )
         elif row["Status"] == 0:
+            # If event_end is NaT update event_end to be None. This is normally because the monitor is yet
+            # to have a discharge event. So, cannot sensibly record the start time of the no discharge event.
+            # if row["latestEventEnd"] is not nan, convert it to datetime, else set it to None
+            if not pd.isna(row["LatestEventEnd"]):
+                last_event_end = pd.to_datetime(row["LatestEventEnd"], unit="ms")
+            else:
+                last_event_end = None
             event = NoDischarge(
                 monitor=monitor,
                 ongoing=True,
-                start_time=pd.to_datetime(row["StatusStart"], unit="ms"),
+                # Assume the the period of no discharge is from the end of the last event to the current time
+                start_time=last_event_end,
             )
         else:
             raise Exception(
@@ -720,7 +729,7 @@ class AnglianWater(WaterCompany):
     HISTORICAL_API_RESOURCE = ""
     API_LIMIT = 1000  # Max num of outputs that can be requested from the API at once
 
-    D8_FILE_URL = "https://zenodo.org/records/14219156/files/anglian_d8.nc?download=1"
+    D8_FILE_URL = "https://zenodo.org/records/14225298/files/anglian_d8.nc?download=1"
     D8_FILE_HASH = "md5:a053da23a0305b36856f38f4a5e59e10"
 
     def __init__(self, clientID="", clientSecret=""):
@@ -823,7 +832,6 @@ class AnglianWater(WaterCompany):
                 start_time=pd.to_datetime(row["LatestEventStart"], unit="ms"),
             )
         elif row["Status"] == 0:
-            last_event_end = pd.to_datetime(row["LatestEventEnd"], unit="ms")
             # If event_end is NaT update event_end to be None. This is normally because the monitor is yet
             # to have a discharge event. So, cannot sensibly record the start time of the no discharge event.
             # if row["latestEventEnd"] is not nan, convert it to datetime, else set it to None
@@ -857,18 +865,18 @@ class WessexWater(WaterCompany):
     HISTORICAL_API_RESOURCE = ""
     API_LIMIT = 2000  # Max num of outputs that can be requested from the API at once
 
-    # D8_FILE_URL = "https://zenodo.org/records/14219156/files/southern_d8.nc?download=1"
-    # D8_FILE_HASH = "md5:4696dfce4e1c4cdc0479af03e6b38106"
+    D8_FILE_URL = "https://zenodo.org/records/14225298/files/wessex_d8.nc?download=1"
+    D8_FILE_HASH = "md5:ad906953e7cbb8ff816068c5308dadc3"
 
     def __init__(self, clientID="", clientSecret=""):
         # No auth required for this API so no need to pass in clientID and clientSecret
         print("\033[36m" + "Initialising Wessex Water object..." + "\033[0m")
         self._name = "WessexWater"
         super().__init__(clientID, clientSecret)
-        # self._d8_file_path = self._fetch_d8_file(
-        #     url=self.D8_FILE_URL,
-        #     known_hash=self.D8_FILE_HASH,
-        # )
+        self._d8_file_path = self._fetch_d8_file(
+            url=self.D8_FILE_URL,
+            known_hash=self.D8_FILE_HASH,
+        )
         self._alerts_table = f"{self._name}_alerts.csv"
         self._alerts_table_update_list = f"{self._name}_alerts_update_list.dat"
 
@@ -985,18 +993,18 @@ class SouthWestWater(WaterCompany):
     HISTORICAL_API_RESOURCE = ""
     API_LIMIT = 1000  # Max num of outputs that can be requested from the API at once
 
-    # D8_FILE_URL = "https://zenodo.org/records/14219156/files/southern_d8.nc?download=1"
-    # D8_FILE_HASH = "md5:4696dfce4e1c4cdc0479af03e6b38106"
+    D8_FILE_URL = "https://zenodo.org/records/14225298/files/southwest_d8.nc?download=1"
+    D8_FILE_HASH = "md5:1df4df2f3d7afac19c1d8f9dcf794882"
 
     def __init__(self, clientID="", clientSecret=""):
         # No auth required for this API so no need to pass in clientID and clientSecret
         print("\033[36m" + "Initialising South West Water object..." + "\033[0m")
         self._name = "SouthWest Water"
         super().__init__(clientID, clientSecret)
-        # self._d8_file_path = self._fetch_d8_file(
-        #     url=self.D8_FILE_URL,
-        #     known_hash=self.D8_FILE_HASH,
-        # )
+        self._d8_file_path = self._fetch_d8_file(
+            url=self.D8_FILE_URL,
+            known_hash=self.D8_FILE_HASH,
+        )
         self._alerts_table = f"{self._name}_alerts.csv"
         self._alerts_table_update_list = f"{self._name}_alerts_update_list.dat"
 
@@ -1034,6 +1042,12 @@ class SouthWestWater(WaterCompany):
 
         x, y = latlong_to_osgb(row["latitude"], row["longitude"])
 
+        # South West Water does not always provide a site name or even ID! Losers!
+        if pd.isna(row["ID"]):
+            name = "Unknown"
+        else:
+            name = row["ID"]
+
         # if monitor currently discharging we set last_48h to be True.
         if row["status"] == 1:
             last_48h = True
@@ -1054,7 +1068,7 @@ class SouthWestWater(WaterCompany):
             receiving_watercourse = row["receivingWaterCourse"]
 
         return Monitor(
-            site_name=row["ID"],  # South West Water does not provide a site name
+            site_name=name,  # South West Water does not provide a site name so we use the ID
             permit_number="Unknown",  # Assuming that the permit number is the ID
             x_coord=x,
             y_coord=y,
@@ -1107,18 +1121,20 @@ class UnitedUtilities(WaterCompany):
     HISTORICAL_API_RESOURCE = ""
     API_LIMIT = 2000  # Max num of outputs that can be requested from the API at once
 
-    # D8_FILE_URL = "https://zenodo.org/records/14219156/files/southern_d8.nc?download=1"
-    # D8_FILE_HASH = "md5:4696dfce4e1c4cdc0479af03e6b38106"
+    D8_FILE_URL = (
+        "https://zenodo.org/records/14225298/files/unitedutilities_d8.nc?download=1"
+    )
+    D8_FILE_HASH = "md5:ebd906bc2ebb3239cb8ae40dca71f9a1"
 
     def __init__(self, clientID="", clientSecret=""):
         # No auth required for this API so no need to pass in clientID and clientSecret
         print("\033[36m" + "Initialising United Utilities object..." + "\033[0m")
         self._name = "United Utilities"
         super().__init__(clientID, clientSecret)
-        # self._d8_file_path = self._fetch_d8_file(
-        #     url=self.D8_FILE_URL,
-        #     known_hash=self.D8_FILE_HASH,
-        # )
+        self._d8_file_path = self._fetch_d8_file(
+            url=self.D8_FILE_URL,
+            known_hash=self.D8_FILE_HASH,
+        )
         self._alerts_table = f"{self._name}_alerts.csv"
         self._alerts_table_update_list = f"{self._name}_alerts_update_list.dat"
 
