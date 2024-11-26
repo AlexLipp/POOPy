@@ -1091,7 +1091,8 @@ class SouthWestWater(WaterCompany):
                 "Unknown status type " + row["status"] + " for monitor " + row["ID"]
             )
         return event
-    
+
+
 class UnitedUtilities(WaterCompany):
     """
     Creates an object to interact with the United Utilities EDM API.
@@ -1165,7 +1166,7 @@ class UnitedUtilities(WaterCompany):
                 current_time - pd.to_datetime(row["LatestEventEnd"], unit="ms")
             ) <= timedelta(hours=48)
         else:
-            # This is normally the case when the monitor has never discharged. But for UU the information in the data-stream is not clear, 
+            # This is normally the case when the monitor has never discharged. But for UU the information in the data-stream is not clear,
             # specifically the "LatestEventEnd" field is not always populated sensibly (nor is the "StatusStart" field). Shrug!
             last_48h = None
 
