@@ -14,6 +14,7 @@ from poopy.companies import (
     UnitedUtilities,
     YorkshireWater,
     NorthumbrianWater,
+    SevernTrentWater,
 )
 from poopy.poopy import Monitor, WaterCompany, Event
 
@@ -387,3 +388,44 @@ def test_northunbrian_water_init():
     assert nw.accumulator.extent == [289975.0, 409975.0, 333025.0, 610025.0]
     # Now test the rest of the object which is common to all WaterCompany objects
     check_watercompany(nw)
+
+def test_severn_trent_water_init():
+    """
+    Test the basic initialization of a SevernTrentWater object
+    """
+
+    stw = SevernTrentWater()
+    assert stw.name == "SevernTrentWater"
+    assert stw.clientID == ""
+    assert stw.clientSecret == ""
+
+    # Now test some specifics to do with how we interpret the data from Yorkshire Water
+    stw_df = stw._fetch_current_status_df()
+    stw_df_discharging = stw_df[stw_df["Status"] == 1]
+    stw_df_not_discharging = stw_df[stw_df["Status"] == 0]
+    # Get the subset of the dataframe where the latestEventStart is not null (i.e., an event has been recorded)
+    stw_df_not_discharging_have_recorded = stw_df_not_discharging[
+        stw_df_not_discharging["LatestEventEnd"].notnull()
+    ]
+
+    # Check that for discharging events the StatusStart is the same as LatestEventStart
+    # Run the assertion if this dataframe has any rows
+    if not stw_df_discharging.empty:
+        assert (
+            stw_df_discharging["StatusStart"] == stw_df_discharging["LatestEventStart"]
+        ).all()
+
+    # Check that for non-discharging events the StatusStart is the same as LatestEventEnd (but only if it has values). 
+    # This *Fails* in the case of Severn Trent Water _potentially_ because the StatusStart records when it transitions from
+    # offline to not discharging. This is why we comment this out for now. We opt to use StatusStart as the start of the event 
+    # but this discrepancy should be noted...
+    if not stw_df_not_discharging_have_recorded.empty:
+        assert (
+            stw_df_not_discharging_have_recorded["StatusStart"]
+            == stw_df_not_discharging_have_recorded["LatestEventEnd"]
+        ).all()
+
+    # Check that the accumulator is initialized correctly with the correct extent (in OSGB)
+    assert stw.accumulator.extent == [289975.0, 409975.0, 333025.0, 610025.0]
+    # Now test the rest of the object which is common to all WaterCompany objects
+    check_watercompany(stw)
