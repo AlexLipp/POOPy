@@ -302,3 +302,42 @@ def test_united_utilities_init():
     assert uu.accumulator.extent == [289975.0, 409975.0, 333025.0, 610025.0]
     # Now test the rest of the object which is common to all WaterCompany objects
     check_watercompany(uu)
+
+
+def test_yorkshire_water_init():
+    """
+    Test the basic initialization of a YorkshireWater object
+    """
+
+    yw = YorkshireWater()
+    assert yw.name == "YorkshireWater"
+    assert yw.clientID == ""
+    assert yw.clientSecret == ""
+
+    # Now test some specifics to do with how we interpret the data from Yorkshire Water
+    yw_df = yw._fetch_current_status_df()
+    yw_df_discharging = yw_df[yw_df["Status"] == 1]
+    yw_df_not_discharging = yw_df[yw_df["Status"] == 0]
+    # Get the subset of the dataframe where the latestEventStart is not null (i.e., an event has been recorded)
+    yw_df_not_discharging_have_recorded = yw_df_not_discharging[
+        yw_df_not_discharging["LatestEventEnd"].notnull()
+    ]
+
+    # Check that for discharging events the StatusStart is the same as LatestEventStart
+    # Run the assertion if this dataframe has any rows
+    if not yw_df_discharging.empty:
+        assert (
+            yw_df_discharging["StatusStart"] == yw_df_discharging["LatestEventStart"]
+        ).all()
+
+    # Check that for non-discharging events the StatusStart is the same as LatestEventEnd (but only if it has values)
+    if not yw_df_not_discharging_have_recorded.empty:
+        assert (
+            yw_df_not_discharging_have_recorded["StatusStart"]
+            == yw_df_not_discharging_have_recorded["LatestEventEnd"]
+        ).all()
+
+    # Check that the accumulator is initialized correctly with the correct extent (in OSGB)
+    assert yw.accumulator.extent == [289975.0, 409975.0, 333025.0, 610025.0]
+    # Now test the rest of the object which is common to all WaterCompany objects
+    check_watercompany(yw)
