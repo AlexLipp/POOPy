@@ -69,9 +69,9 @@ export TW_CLIENT_SECRET="your_client_secret"
 A test script is provided in the `tests` folder. To run the tests, you will need to install the [`pytest` package](https://docs.pytest.org/en/stable/). If installed, the tests can be run from the command line by navigating to the folder in which the package is installed and simply running the command: 
 
 ```bash
-pytest
+pytest --disable-warnings
 ```
-This will run the tests and provide a summary of the results. If all tests pass, the package has been installed correctly and behaving as expected. 
+This will run the tests and provide a summary of the results. If all tests pass, the package has been installed correctly and behaving as expected. Note that the `--disable-warnings` flag is used to suppress the many warnings that `POOPy` generates, these are mostly informative rather than disastrous (e.g., indicating when an input data-stream is ambiguous), but can be overwhelming _en masse_. 
 
 
 ## Usage
