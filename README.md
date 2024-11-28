@@ -100,14 +100,24 @@ Examples of how to use the package (using the `ThamesWater` class as an example)
 
 ### Gallery
 
-`POOPy` can be used, for example to make figures like...
+`POOPy` can be used to be really easily make figures like...
 
 ... this one showing the stretches of the Thames downstream of active sewage discharges at the shown time...
 
+```
+from poopy.companies import ThamesWater
+tw=ThamesWater()
+tw.plot_current_status()
+```
 ![map](https://github.com/AlexLipp/POOPy/assets/10188895/395732dc-54c1-403e-b681-be3bece7f7e7)
 
 ...or this one which shows the discharge history of a specific monitor...
-
+```
+from poopy.companies import ThamesWater
+tw=ThamesWater()
+monitor=tw.active_monitors["Bourton-On-The_water"]
+monitor.plot_history()
+```
 ![bourton_on_the_water](https://github.com/AlexLipp/POOPy/assets/10188895/feeb6035-78f0-4c48-b3f2-bd1d18f2ce96)
 
 ...or this one which shows the number of live monitors deployed by Thames Water through time and whether they were discharging...
