@@ -12,6 +12,8 @@ from poopy.companies import (
     WessexWater,
     SouthWestWater,
     UnitedUtilities,
+    YorkshireWater,
+    NorthumbrianWater,
 )
 from poopy.poopy import Monitor, WaterCompany, Event
 
@@ -298,6 +300,9 @@ def test_united_utilities_init():
     assert uu.clientID == ""
     assert uu.clientSecret == ""
 
+    # For UU we use LatestStart and LatestEnd rather than StatusStart (which is unreliable for UU).
+    # So we don't need to test the StatusStart attribute.
+
     # Check that the accumulator is initialized correctly with the correct extent (in OSGB)
     assert uu.accumulator.extent == [289975.0, 409975.0, 333025.0, 610025.0]
     # Now test the rest of the object which is common to all WaterCompany objects
@@ -324,7 +329,7 @@ def test_yorkshire_water_init():
     ]
 
     # Check that for discharging events the StatusStart is the same as LatestEventStart
-    # Run the assertion if this dataframe has any rows
+    # Run the assertion if this dataframe has any rows.
     if not yw_df_discharging.empty:
         assert (
             yw_df_discharging["StatusStart"] == yw_df_discharging["LatestEventStart"]
@@ -341,3 +346,44 @@ def test_yorkshire_water_init():
     assert yw.accumulator.extent == [289975.0, 409975.0, 333025.0, 610025.0]
     # Now test the rest of the object which is common to all WaterCompany objects
     check_watercompany(yw)
+
+
+def test_northunbrian_water_init():
+    """
+    Test the basic initialization of a NorthumbrianWater object
+    """
+
+    nw = NorthumbrianWater()
+    assert nw.name == "NorthumbrianWater"
+    assert nw.clientID == ""
+    assert nw.clientSecret == ""
+
+    # Now test some specifics to do with how we interpret the data from Yorkshire Water
+    nw_df = nw._fetch_current_status_df()
+    nw_df_discharging = nw_df[nw_df["Status"] == 1]
+    nw_df_not_discharging = nw_df[nw_df["Status"] == 0]
+    # Get the subset of the dataframe where the latestEventStart is not null (i.e., an event has been recorded)
+    nw_df_not_discharging_have_recorded = nw_df_not_discharging[
+        nw_df_not_discharging["LatestEventEnd"].notnull()
+    ]
+
+    # Check that for discharging events the StatusStart is the same as LatestEventStart
+    # Run the assertion if this dataframe has any rows
+    if not nw_df_discharging.empty:
+        assert (
+            nw_df_discharging["StatusStart"] == nw_df_discharging["LatestEventStart"]
+        ).all()
+
+    # Check that for non-discharging events the StatusStart is the same as LatestEventEnd (but only if it has values)
+    # This fails in the case of Northumbrian Water _potentially_ because the StatusStart records when it transitions from offline to not discharging
+    # rather than when it transitions from discharging to not discharging...
+    if not nw_df_not_discharging_have_recorded.empty:
+        assert (
+            nw_df_not_discharging_have_recorded["StatusStart"]
+            == nw_df_not_discharging_have_recorded["LatestEventEnd"]
+        ).all()
+
+    # Check that the accumulator is initialized correctly with the correct extent (in OSGB)
+    assert nw.accumulator.extent == [289975.0, 409975.0, 333025.0, 610025.0]
+    # Now test the rest of the object which is common to all WaterCompany objects
+    check_watercompany(nw)
