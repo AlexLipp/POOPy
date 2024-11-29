@@ -1103,7 +1103,7 @@ class WaterCompany(ABC):
         if include_recent_discharges:
             sources = self.recently_discharging_monitors
         else:
-            sources = self.active_monitors
+            sources = self.discharging_monitors
         return self._calculate_downstream_info(sources)
 
     def get_historical_downstream_info_geojson_at(

@@ -2,6 +2,8 @@ import datetime
 import os
 import warnings
 
+import pytest
+
 from numpy import isnan
 
 from poopy.companies import (
@@ -103,6 +105,35 @@ def check_watercompany(wc: WaterCompany):
     assert (datetime.datetime.now() - wc._timestamp) < datetime.timedelta(minutes=1)
     # Assert that the set of active monitor names is the same as the set of active monitors
     assert set(wc.active_monitor_names) == set(wc.active_monitors.keys())
+
+    # Check that get_downstream_geojson calls run without errors
+    try:
+        wc.get_downstream_geojson(include_recent_discharges=False)
+    except Exception as e:
+        pytest.fail(
+            f"get_downstream_geojson(include_recent_discharges=False) raised an exception: {e}"
+        )
+
+    try:
+        wc.get_downstream_geojson(include_recent_discharges=True)
+    except Exception as e:
+        pytest.fail(
+            f"get_downstream_geojson(include_recent_discharges=True) raised an exception: {e}"
+        )
+
+    try:
+        wc.get_downstream_info_geojson(include_recent_discharges=False)
+    except Exception as e:
+        pytest.fail(
+            f"get_downstream_info_geojson(include_recent_discharges=False) raised an exception: {e}"
+        )
+
+    try:
+        wc.get_downstream_info_geojson(include_recent_discharges=True)
+    except Exception as e:
+        pytest.fail(
+            f"get_downstream_info_geojson(include_recent_discharges=True) raised an exception: {e}"
+        )
 
     for monitor in wc.active_monitors.values():
         # Assert that every monitor object passes generic checks
@@ -369,7 +400,7 @@ def test_northunbrian_water_init():
     ]
 
     # # Check that for discharging events the StatusStart is the same as LatestEventStart
-    # # Run the assertion if this dataframe has any rows. This is commented out because it fails for Northumbrian Water... 
+    # # Run the assertion if this dataframe has any rows. This is commented out because it fails for Northumbrian Water...
     # # Find a better way to test this...!!!
     # if not nw_df_discharging.empty:
     #     assert (
@@ -389,6 +420,7 @@ def test_northunbrian_water_init():
     assert nw.accumulator.extent == [354975.0, 474975.0, 498025.0, 655025.0]
     # Now test the rest of the object which is common to all WaterCompany objects
     check_watercompany(nw)
+
 
 def test_severn_trent_water_init():
     """
