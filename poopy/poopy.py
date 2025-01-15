@@ -940,10 +940,16 @@ class WaterCompany(ABC):
         # Extract all the xy coordinates of active discharges
         accumulator = self.accumulator
         # Coords of all sources in OSGB
-        source_nodes = [
-            accumulator.coord_to_node(discharge.x_coord, discharge.y_coord)
-            for discharge in source_monitors
-        ]
+
+        source_nodes = [] 
+        for discharge in source_monitors:
+            try:
+                source_nodes.append(
+                    accumulator.coord_to_node(discharge.x_coord, discharge.y_coord)
+                )
+            except ValueError as e:
+                warnings.warn(f"Skipping out of bounds monitor {discharge.site_name}: {e}")
+
         # Set up the source array for propagating discharges downstream
         source_array = np.zeros(accumulator.arr.shape).flatten()
         source_array[source_nodes] = 1
@@ -1030,7 +1036,11 @@ class WaterCompany(ABC):
 
         # Add the sources for each impacted node to the dictionary of properties
         for monitor in sources:
-            node = self.accumulator.coord_to_node(monitor.x_coord, monitor.y_coord)
+            try:
+                node = self.accumulator.coord_to_node(monitor.x_coord, monitor.y_coord)
+            except ValueError as e:
+                warnings.warn(f"Skipping out of bounds monitor {monitor.site_name}: {e}")
+                continue                
             dstream, _ = self.accumulator.get_profile(node)
             for node in dstream:
                 dstream_info[node]["CSOs"].append(monitor.site_name)
