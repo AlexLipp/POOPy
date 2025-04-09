@@ -1,12 +1,12 @@
 """
 Module for accumulating flow on a D8 flow grid. This class can be used to calculate drainage area and discharge,
-and to accumulate any other tracer across a drainage network. 
+and to accumulate any other tracer across a drainage network.
 
-Builds a network of nodes from a D8 flow grid. Uses a queue-based algorithm to traverse the network in topological order, 
-modified from Braun & Willet (2013) DOI: 10.1016/j.geomorph.2012.10.008. This is faster than the recursive algorithm used in 
-original Landlab implementation as we use an iterative build_ordered_list algorithm (much faster). Most of the code is written 
-in Cython for speed. The approach is linear w.r.t. the number of nodes in the network. Class is designed to be used with 
-geospatial rasters, but can also be used with a numpy array of D8 flow directions with some loss of functionality. 
+Builds a network of nodes from a D8 flow grid. Uses a queue-based algorithm to traverse the network in topological order,
+modified from Braun & Willet (2013) DOI: 10.1016/j.geomorph.2012.10.008. This is faster than the recursive algorithm used in
+original Landlab implementation as we use an iterative build_ordered_list algorithm (much faster). Most of the code is written
+in Cython for speed. The approach is linear w.r.t. the number of nodes in the network. Class is designed to be used with
+geospatial rasters, but can also be used with a numpy array of D8 flow directions with some loss of functionality.
 """
 
 import warnings

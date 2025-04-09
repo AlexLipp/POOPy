@@ -1,12 +1,12 @@
 """
-This module provides classes for interacting with the EDM APIs of various water companies. 
+This module provides classes for interacting with the EDM APIs of various water companies.
 Each WaterCompany subclass is responsible for interacting with the API of a specific water company.
-Each Water Company (unhelpfully) has _slightly_ different methods for interacting with very similar data. 
-As a result, there is quite a lot of code duplication between the classes, however, there are also enough 
-differences that it is not _easy_ to abstract the code into a single class. Additionally, whilst 
-it could be possible to do this, it would make the code less readable and harder to maintain. So, we 
+Each Water Company (unhelpfully) has _slightly_ different methods for interacting with very similar data.
+As a result, there is quite a lot of code duplication between the classes, however, there are also enough
+differences that it is not _easy_ to abstract the code into a single class. Additionally, whilst
+it could be possible to do this, it would make the code less readable and harder to maintain. So, we
 have opted for the current design of having separate classes for each water company. This also allows
-for more flexibility in the future if the APIs change and require different methods of interaction. 
+for more flexibility in the future if the APIs change and require different methods of interaction.
 """
 
 from datetime import datetime, timedelta
@@ -1659,7 +1659,7 @@ def _process_monitor_history_pl(
         pd.DataFrame,
         Dict[str, Monitor],
         Callable[[pd.DataFrame, Monitor], List[Event]],
-    ]
+    ],
 ) -> Tuple[str, List[Event]]:
     """
     Process a single monitor's history in parallel. This function is used in
