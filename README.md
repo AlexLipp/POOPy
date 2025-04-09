@@ -149,8 +149,6 @@ Now the checks will automatically run when you `commit`, but you can:
 
 The settings for these linters is detailed in `.pre-commit-config.yaml`.
 
-### Unit testing 
-The same pre-commit will also run the unit-tests detailed above. `pytest` will be required. This ensures that the code-base only contains code that passes the unit-tests.
 
 ## Credit
 
