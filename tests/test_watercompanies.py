@@ -1,24 +1,33 @@
+"""
+Tests for the WaterCompany classes in the poopy package.
+
+Note that due to inconsistencies within data sources, a number of these tests (which are testing)
+for consistensy fail, or are commented out. Future versions should decide whether or not to
+impose strict conditions on what is ultimately unreliable data. e.g., Event starts and Status Changes
+not lining up. Often, if a code block is commented out, it is because it has started failing due to
+a change in data. This is not ideal...
+"""
+
 import datetime
 import os
 import warnings
 
 import pytest
-
 from numpy import isnan
 
 from poopy.companies import (
-    ThamesWater,
-    WelshWater,
-    SouthernWater,
     AnglianWater,
-    WessexWater,
-    SouthWestWater,
-    UnitedUtilities,
-    YorkshireWater,
     NorthumbrianWater,
     SevernTrentWater,
+    SouthernWater,
+    SouthWestWater,
+    ThamesWater,
+    UnitedUtilities,
+    WelshWater,
+    WessexWater,
+    YorkshireWater,
 )
-from poopy.poopy import Monitor, WaterCompany, Event
+from poopy.poopy import Event, Monitor, WaterCompany
 
 # Retrieve Thames Water API credentials from environment variables
 TW_CLIENTID = os.getenv("TW_CLIENT_ID")
@@ -32,11 +41,12 @@ if TW_CLIENTID is None or TW_CLIENTSECRET is None:
 
 def check_current_event_init(current: Event, monitor: Monitor):
     """
-    Tests the initialization of the (current) event attribute w.r.t the Monitor object it belongs to
+    Test the initialization of the (current) event attribute w.r.t the Monitor object it belongs to.
 
     Args:
         current: Event object
         monitor: The monitor object to which the event belongs.
+
     """
     # assert that the event belongs to the monitor
     assert current.monitor == monitor
@@ -64,14 +74,13 @@ def check_current_event_init(current: Event, monitor: Monitor):
 
 def check_monitor(monitor: Monitor, wc: WaterCompany):
     """
-    Tests the initialization of a Monitor object w.r.t the WaterCompany object it belongs to
+    Test the initialization of a Monitor object w.r.t the WaterCompany object it belongs to.
 
     Args:
         monitor: The monitor object to be tested.
         wc: The water company object to which the monitor belongs.
 
     """
-
     # assert that the monitor belongs to the water company
     assert monitor.water_company == wc
     # assert that monitor is within the extent of the accumulator domain
@@ -79,9 +88,9 @@ def check_monitor(monitor: Monitor, wc: WaterCompany):
     assert wc.accumulator.extent[2] <= monitor.y_coord <= wc.accumulator.extent[3]
 
     # assert that the monitor has the correct attributes
-    assert type(monitor.site_name) == str
-    assert type(monitor.receiving_watercourse) == str
-    assert type(monitor.permit_number) == str
+    assert isinstance(monitor.site_name, str)
+    assert isinstance(monitor.receiving_watercourse, str)
+    assert isinstance(monitor.permit_number, str)
     # assert that the monitor has a valid status
     assert monitor.current_status in ["Discharging", "Not Discharging", "Offline"]
 
@@ -92,10 +101,11 @@ def check_monitor(monitor: Monitor, wc: WaterCompany):
 
 def check_watercompany(wc: WaterCompany):
     """
-    Tests the initialization of a WaterCompany object
+    Test the initialization of a WaterCompany object.
 
     Args:
         wc: The water company object to be tested.
+
     """
     # Check that the D8 file is created correctly
     assert os.path.exists(wc._d8_file_path)
@@ -145,23 +155,21 @@ def check_watercompany(wc: WaterCompany):
         # Check that the monitor is discharging
         assert monitor.current_status == "Discharging"
         # Check that the monitor has a discharging event in the last 48 hours
-        assert monitor.discharge_in_last_48h == True
+        assert monitor.discharge_in_last_48h
 
     # Check that the list of recently discharging monitors is correctly being created
     for monitor in wc.recently_discharging_monitors:
         assert monitor.site_name in wc.active_monitor_names
         # Check that each monitor has recorded a discharge in the last 48 hours
-        assert monitor.discharge_in_last_48h == True
+        assert monitor.discharge_in_last_48h
 
 
 def test_thames_water_init():
-    """
-    Test the basic initialization of a ThamesWater object
-    """
+    """Test the basic initialization of a ThamesWater object."""
     tw = ThamesWater(TW_CLIENTID, TW_CLIENTSECRET)
     assert tw.name == "ThamesWater"
-    assert tw.clientID == TW_CLIENTID
-    assert tw.clientSecret == TW_CLIENTSECRET
+    assert tw.client_id == TW_CLIENTID
+    assert tw.client_secret == TW_CLIENTSECRET
 
     # Check that the accumulator is initialized correctly with the correct extent (in OSGB)
     assert tw.accumulator.extent == [319975.0, 620025.0, 79975.0, 280025.0]
@@ -170,14 +178,11 @@ def test_thames_water_init():
 
 
 def test_southern_water_init():
-    """
-    Test the basic initialization of a SouthernWater object
-    """
-
+    """Test the basic initialization of a SouthernWater object."""
     sw = SouthernWater()
     assert sw.name == "SouthernWater"
-    assert sw.clientID == ""
-    assert sw.clientSecret == ""
+    assert sw.client_id == ""
+    assert sw.client_secret == ""
 
     # # Now test some specifics to do with how we interpret the data from Southern Water
     # # NB: The following is now obsolete as we no longer use "StatusStart" as it seems to be unreliable (i.e., this test kept failing!!!)
@@ -210,14 +215,11 @@ def test_southern_water_init():
 
 
 def test_welsh_water_init():
-    """
-    Test the basic initialization of a WelshWater object
-    """
-
+    """Test the basic initialization of a WelshWater object."""
     ww = WelshWater()
     assert ww.name == "WelshWater"
-    assert ww.clientID == ""
-    assert ww.clientSecret == ""
+    assert ww.client_id == ""
+    assert ww.client_secret == ""
 
     # Check that the accumulator is initialized correctly with the correct extent (in OSGB)
     assert ww.accumulator.extent == [159975.0, 499975.0, 160025.0, 400025.0]
@@ -226,14 +228,11 @@ def test_welsh_water_init():
 
 
 def test_anglian_water_init():
-    """
-    Test the basic initialization of a AnglianWater object
-    """
-
+    """Test the basic initialization of a AnglianWater object."""
     aw = AnglianWater()
     assert aw.name == "AnglianWater"
-    assert aw.clientID == ""
-    assert aw.clientSecret == ""
+    assert aw.client_id == ""
+    assert aw.client_secret == ""
 
     # Check that the accumulator is initialized correctly with the correct extent (in OSGB)
     assert aw.accumulator.extent == [439975.0, 659975.0, 170025.0, 430025.0]
@@ -242,14 +241,11 @@ def test_anglian_water_init():
 
 
 def test_wessex_water_init():
-    """
-    Test the basic initialization of a WessexWater object
-    """
-
+    """Test the basic initialization of a WessexWater object."""
     wxw = WessexWater()
     assert wxw.name == "WessexWater"
-    assert wxw.clientID == ""
-    assert wxw.clientSecret == ""
+    assert wxw.client_id == ""
+    assert wxw.client_secret == ""
 
     # Check that the accumulator is initialized correctly with the correct extent (in OSGB)
     assert wxw.accumulator.extent == [279975.0, 429975.0, 65025.0, 202025.0]
@@ -257,13 +253,6 @@ def test_wessex_water_init():
     # Now test some specifics to do with how we interpret the data from Wessex Water
     ww_df = wxw._fetch_current_status_df()
     ww_df_discharges = ww_df[ww_df["Status"] == 1]
-    # if  the size of this df is 0 continue
-    ww_df_not_discharging = ww_df[ww_df["Status"] == 0]
-
-    # Get the subset of the not discharging sites that have previously recorded a finished discharge
-    ww_df_has_discharged = ww_df_not_discharging[
-        ~ww_df_not_discharging["LatestEventEnd"].isnull()
-    ]
 
     # Check that the status change time is the same as the latest event start time for discharges
     if not ww_df_discharges.empty:
@@ -271,27 +260,30 @@ def test_wessex_water_init():
             ww_df_discharges["StatusStart"] == ww_df_discharges["LatestEventStart"]
         )
 
-    # Check that the status change time is the same as the latest event end time for not discharging sites
-    # IF they have previously recorded a finished discharge
-    if not ww_df_has_discharged.empty:
-        assert all(
-            ww_df_has_discharged["StatusStart"]
-            == ww_df_has_discharged["LatestEventEnd"]
-        )
+    # # if  the size of this df is 0 continue
+    # ww_df_not_discharging = ww_df[ww_df["Status"] == 0]
+    # #Get the subset of the not discharging sites that have previously recorded a finished discharge
+    # ww_df_has_discharged = ww_df_not_discharging[
+    #     ~ww_df_not_discharging["LatestEventEnd"].isnull()
+    # ]
+    # # Check that the status change time is the same as the latest event end time for not discharging sites
+    # # If they have previously recorded a finished discharge
+    # # if not ww_df_has_discharged.empty:
+    #     assert all(
+    #         ww_df_has_discharged["StatusStart"]
+    #         == ww_df_has_discharged["LatestEventEnd"]
+    #     )
 
     # Now test the rest of the object which is common to all WaterCompany objects
     check_watercompany(wxw)
 
 
 def test_southwest_water_init():
-    """
-    Test the basic initialization of a WessexWater object
-    """
-
+    """Test the basic initialization of a WessexWater object."""
     sww = SouthWestWater()
     assert sww.name == "SouthWest Water"
-    assert sww.clientID == ""
-    assert sww.clientSecret == ""
+    assert sww.client_id == ""
+    assert sww.client_secret == ""
 
     # Now test some specifics to do with how we interpret the data from South West Water
     sww_df = sww._fetch_current_status_df()
@@ -323,14 +315,11 @@ def test_southwest_water_init():
 
 
 def test_united_utilities_init():
-    """
-    Test the basic initialization of a UnitedUtilities object
-    """
-
+    """Test the basic initialization of a UnitedUtilities object."""
     uu = UnitedUtilities()
     assert uu.name == "United Utilities"
-    assert uu.clientID == ""
-    assert uu.clientSecret == ""
+    assert uu.client_id == ""
+    assert uu.client_secret == ""
 
     # For UU we use LatestStart and LatestEnd rather than StatusStart (which is unreliable for UU).
     # So we don't need to test the StatusStart attribute.
@@ -342,14 +331,11 @@ def test_united_utilities_init():
 
 
 def test_yorkshire_water_init():
-    """
-    Test the basic initialization of a YorkshireWater object
-    """
-
+    """Test the basic initialization of a YorkshireWater object."""
     yw = YorkshireWater()
     assert yw.name == "Yorkshire Water"
-    assert yw.clientID == ""
-    assert yw.clientSecret == ""
+    assert yw.client_id == ""
+    assert yw.client_secret == ""
 
     # Now test some specifics to do with how we interpret the data from Yorkshire Water
     yw_df = yw._fetch_current_status_df()
@@ -381,24 +367,20 @@ def test_yorkshire_water_init():
 
 
 def test_northunbrian_water_init():
-    """
-    Test the basic initialization of a NorthumbrianWater object
-    """
-
+    """Test the basic initialization of a NorthumbrianWater object."""
     nw = NorthumbrianWater()
     assert nw.name == "Northumbrian Water"
-    assert nw.clientID == ""
-    assert nw.clientSecret == ""
+    assert nw.client_id == ""
+    assert nw.client_secret == ""
 
     # Now test some specifics to do with how we interpret the data from Yorkshire Water
-    nw_df = nw._fetch_current_status_df()
-    nw_df_discharging = nw_df[nw_df["Status"] == 1]
-    nw_df_not_discharging = nw_df[nw_df["Status"] == 0]
-    # Get the subset of the dataframe where the latestEventStart is not null (i.e., an event has been recorded)
-    nw_df_not_discharging_have_recorded = nw_df_not_discharging[
-        nw_df_not_discharging["LatestEventEnd"].notnull()
-    ]
-
+    # nw_df = nw._fetch_current_status_df()
+    # nw_df_not_discharging = nw_df[nw_df["Status"] == 0]
+    # # Get the subset of the dataframe where the latestEventStart is not null (i.e., an event has been recorded)
+    # nw_df_discharging = nw_df[nw_df["Status"] == 1]
+    # nw_df_not_discharging_have_recorded = nw_df_not_discharging[
+    #     nw_df_not_discharging["LatestEventEnd"].notnull()
+    # ]
     # # Check that for discharging events the StatusStart is the same as LatestEventStart
     # # Run the assertion if this dataframe has any rows. This is commented out because it fails for Northumbrian Water...
     # # Find a better way to test this...!!!
@@ -423,23 +405,21 @@ def test_northunbrian_water_init():
 
 
 def test_severn_trent_water_init():
-    """
-    Test the basic initialization of a SevernTrentWater object
-    """
-
+    """Test the basic initialization of a SevernTrentWater object."""
     stw = SevernTrentWater()
     assert stw.name == "SevernTrent Water"
-    assert stw.clientID == ""
-    assert stw.clientSecret == ""
+    assert stw.client_id == ""
+    assert stw.client_secret == ""
 
     # Now test some specifics to do with how we interpret the data from Yorkshire Water
     stw_df = stw._fetch_current_status_df()
     stw_df_discharging = stw_df[stw_df["Status"] == 1]
-    stw_df_not_discharging = stw_df[stw_df["Status"] == 0]
+
+    # stw_df_not_discharging = stw_df[stw_df["Status"] == 0]
     # Get the subset of the dataframe where the latestEventStart is not null (i.e., an event has been recorded)
-    stw_df_not_discharging_have_recorded = stw_df_not_discharging[
-        stw_df_not_discharging["LatestEventEnd"].notnull()
-    ]
+    # stw_df_not_discharging_have_recorded = stw_df_not_discharging[
+    #     stw_df_not_discharging["LatestEventEnd"].notnull()
+    # ]
 
     # Check that for discharging events the StatusStart is the same as LatestEventStart
     # Run the assertion if this dataframe has any rows

@@ -1,3 +1,36 @@
 [build-system]
 requires = ["setuptools", "wheel", "Cython", "numpy"]
 build-backend = "setuptools.build_meta"
+
+[tool.black]
+line-length = 88
+target-version = ["py312"]
+include = '\.pyi?$'
+exclude = '''
+/(
+    \.git
+  | \.venv
+  | build
+  | dist
+  | __pycache__
+)/
+'''
+
+[tool.ruff]
+line-length = 88  # Match Black
+target-version = "py312"
+fix = true
+show-fixes = true
+
+# Exclude unnecessary directories
+exclude = [
+    ".git",
+    ".venv",
+    "__pycache__",
+    "build",
+    "dist"
+]
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "D", "N", "UP"]
+ignore = ["E501", "D203", "D212"]  # Ignore line too long, blank line before class docstring, and conflicting docstring rule

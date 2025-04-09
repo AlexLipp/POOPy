@@ -1,27 +1,27 @@
 """
-Module for accumulating flow on a D8 flow grid. This class can be used to calculate drainage area and discharge,
-and to accumulate any other tracer across a drainage network. 
+Module for accumulating flow on a D8 flow grid.
 
-Builds a network of nodes from a D8 flow grid. Uses a queue-based algorithm to traverse the network in topological order, 
-modified from Braun & Willet (2013) DOI: 10.1016/j.geomorph.2012.10.008. This is faster than the recursive algorithm used in 
-original Landlab implementation as we use an iterative build_ordered_list algorithm (much faster). Most of the code is written 
-in Cython for speed. The approach is linear w.r.t. the number of nodes in the network. Class is designed to be used with 
-geospatial rasters, but can also be used with a numpy array of D8 flow directions with some loss of functionality. 
+This class can be used to calculate drainage area and discharge,
+and to accumulate any other tracer across a drainage network.
+
+Builds a network of nodes from a D8 flow grid. Uses a queue-based algorithm to traverse the network in topological order,
+modified from Braun & Willet (2013) DOI: 10.1016/j.geomorph.2012.10.008. This is faster than the recursive algorithm used in
+original Landlab implementation as we use an iterative build_ordered_list algorithm (much faster). Most of the code is written
+in Cython for speed. The approach is linear w.r.t. the number of nodes in the network. Class is designed to be used with
+geospatial rasters, but can also be used with a numpy array of D8 flow directions with some loss of functionality.
 """
 
-import warnings
-from typing import Tuple, List, Union
-
-from geojson import MultiLineString
 import json
-import numpy as np
-from osgeo import gdal
+import warnings
 
 import cfuncs as cf
+import numpy as np
+from geojson import MultiLineString
+from osgeo import gdal
 
 
-def read_geo_file(filename: str) -> Tuple[np.ndarray, gdal.Dataset]:
-    """Reads a geospatial file"""
+def read_geo_file(filename: str) -> tuple[np.ndarray, gdal.Dataset]:
+    """Read a geospatial file."""
     ds = gdal.Open(filename)
     band = ds.GetRasterBand(1)
     arr = band.ReadAsArray()
@@ -29,7 +29,7 @@ def read_geo_file(filename: str) -> Tuple[np.ndarray, gdal.Dataset]:
 
 
 def write_geotiff(filename: str, arr: np.ndarray, ds: gdal.Dataset):
-    """Writes a numpy array to a geotiff"""
+    """Write a numpy array to a geotiff."""
     if arr.dtype == np.float32:
         arr_type = gdal.GDT_Float32
     else:
@@ -46,13 +46,16 @@ def write_geotiff(filename: str, arr: np.ndarray, ds: gdal.Dataset):
 
 
 def write_geojson(filename: str, geojson: dict):
-    """Writes a GeoJSON object to a file"""
+    """Write a GeoJSON object to a file."""
     with open(filename, "w") as f:
         json.dump(geojson, f)
 
 
 class D8Accumulator:
-    """Class to accumulate flow on a D8 flow grid. This class can be used to calculate drainage area and discharge,
+    """
+    Class to accumulate flow on a D8 flow grid.
+
+    This class can be used to calculate drainage area and discharge,
     and to accumulate any other tracer across a drainage network. The class assumes that all boundary
     nodes are sinks (i.e., no flow leaves the grid). This class can be used with any geospatial file that GDAL can read.
     It can also be used with a numpy array of D8 flow directions.
@@ -102,14 +105,18 @@ class D8Accumulator:
         Converts a node index to a coordinate pair
     coord_to_node(x : float, y : float)
         Converts a coordinate pair to a node index
+
     """
 
     def __init__(self, filename: str):
         """
+        Initialize the D8Accumulator class.
+
         Parameters
         ----------
         filename : str
             Path to the D8 flow grid
+
         """
         # Check that filename is a string
         if not isinstance(filename, str):
@@ -125,7 +132,8 @@ class D8Accumulator:
         )
 
     def accumulate(self, weights: np.ndarray = None) -> np.ndarray:
-        """Accumulate flow on the grid using the D8 flow directions
+        """
+        Accumulate flow on the grid using the D8 flow directions.
 
         Parameters
         ----------
@@ -138,6 +146,7 @@ class D8Accumulator:
         -------
         np.ndarray [ndim = 2]
             Array of accumulated weights (or number of upstream nodes if no weights are passed)
+
         """
         if weights is None:
             # If no weights are passed, assume all nodes have equal weight of 1.
@@ -154,9 +163,11 @@ class D8Accumulator:
 
     def get_channel_segments(
         self, field: np.ndarray, threshold: float
-    ) -> Union[List[List[int]], MultiLineString]:
-        """Get the profile segments of river channels where 'field' is greater than 'threshold'. i.e.,
-        if 'field' is drainage area, this will return the profile segments of channels with drainage area greater than 'threshold'.
+    ) -> list[list[int]] | MultiLineString:
+        """
+        Get the profile segments of river channels where 'field' is greater than 'threshold'.
+
+        i.e., if 'field' is drainage area, this will return the profile segments of channels with drainage area greater than 'threshold'.
         Generated by topologically traversing the network using a depth-first search algorithm from baselevel nodes, only
         continuing to traverse a node if the value of 'field' is greater than 'threshold'. If the D8 flow grid is a geospatial
         raster, this will return a GeoJSON MultiLineString object of the profile segments. If the D8 flow grid is a numpy array,
@@ -173,6 +184,7 @@ class D8Accumulator:
         -------
             - GeoJSON MultiLineString object of the profile segments if the D8 flow grid is a geospatial raster.
             - List of segments of node IDs if the D8 flow grid is a numpy array (and no GDAL Dataset object exists)
+
         """
         # Nodes where field is greater than threshold
         gteq_thresh = (field > threshold).flatten()
@@ -196,19 +208,21 @@ class D8Accumulator:
             return segments
         else:
             geotransform = self.ds.GetGeoTransform()
-            ULx = geotransform[0]
-            ULy = geotransform[3]
+            ulx = geotransform[0]
+            uly = geotransform[3]
             dx = geotransform[1]
             dy = geotransform[5]
             ncols = self.arr.shape[1]
             coord_segs = cf.id_segments_to_coords_segments(
-                segments, ncols, dx, dy, ULx, ULy
+                segments, ncols, dx, dy, ulx, uly
             )
             return MultiLineString(coord_segs)
 
-    def get_profile(self, start_node: int) -> Tuple[np.ndarray[int], np.ndarray[float]]:
-        """Extract the downstream profile *from* a given node. Returns the profile as a list
-        of node IDs in order upstream to downstream. Also returns the distance along the profile
+    def get_profile(self, start_node: int) -> tuple[np.ndarray[int], np.ndarray[float]]:
+        """
+        Extract the downstream profile *from* a given node.
+
+        Returns the profile as a list of node IDs in order upstream to downstream. Also returns the distance along the profile
         *counting upstream from the mouth* in the same units as the geospatial file. i.e.,
         a distance of 0 is the mouth of the river, and a distance of 100 is 100 units upstream from the mouth.
 
@@ -226,6 +240,7 @@ class D8Accumulator:
         ------
         ValueError
             If start_node is not a valid node ID
+
         """
         if start_node < 0 or start_node >= self.arr.size:
             raise ValueError("start_node must be a valid node index")
@@ -243,8 +258,8 @@ class D8Accumulator:
             dstream_dist = np.asarray(distance)
             return np.asarray(profile), np.amax(dstream_dist) - dstream_dist
 
-    def node_to_coord(self, node: int) -> Tuple[float, float]:
-        """Converts a node index to a coordinate pair for the centre of the pixel"""
+    def node_to_coord(self, node: int) -> tuple[float, float]:
+        """Convert a node index to a coordinate pair for the centre of the pixel."""
         nrows, ncols = self.arr.shape
         if node > ncols * nrows or node < 0:
             raise ValueError("Node is out of bounds")
@@ -261,7 +276,7 @@ class D8Accumulator:
         return x_coord, y_coord
 
     def coord_to_node(self, x: float, y: float) -> int:
-        """Converts a coordinate pair to a node index. Returns the node index of the pixel that contains the coordinate"""
+        """Convert a coordinate pair to a node index. Returns the node index of the pixel that contains the coordinate."""
         nrows, ncols = self.arr.shape
         ulx, dx, _, uly, _, dy = self.ds.GetGeoTransform()
         x_ind = int((x - ulx) / dx)
@@ -274,29 +289,27 @@ class D8Accumulator:
 
     @property
     def receivers(self) -> np.ndarray:
-        """Array of receiver nodes (i.e., the ID of the node that receives the flow from the i'th node)"""
+        """Array of receiver nodes (i.e., the ID of the node that receives the flow from the i'th node)."""
         return np.asarray(self._receivers)
 
     @property
     def baselevel_nodes(self) -> np.ndarray:
-        """Array of baselevel nodes (i.e., nodes that do not donate flow to any other nodes)"""
+        """Array of baselevel nodes (i.e., nodes that do not donate flow to any other nodes)."""
         return self._baselevel_nodes
 
     @property
     def order(self) -> np.ndarray:
-        """Array of nodes in order of upstream to downstream"""
+        """Array of nodes in order of upstream to downstream."""
         return np.asarray(self._order)
 
     @property
     def arr(self):
-        """Array of D8 flow directions"""
+        """Array of D8 flow directions."""
         return self._arr
 
     @property
-    def extent(self) -> List[float]:
-        """
-        Get the extent of the array in the accumulator. Can be used for plotting.
-        """
+    def extent(self) -> list[float]:
+        """Get the extent of the array in the accumulator. Can be used for plotting."""
         trsfm = self.ds.GetGeoTransform()
         minx = trsfm[0]
         maxy = trsfm[3]
@@ -306,7 +319,7 @@ class D8Accumulator:
 
     @property
     def ds(self):
-        """GDAL Dataset object of the D8 flow grid"""
+        """GDAL Dataset object of the D8 flow grid."""
         if self._ds is None:
             warnings.warn("\nNo GDAL Dataset object exists.")
         return self._ds
@@ -329,12 +342,13 @@ class D8Accumulator:
     @classmethod
     def from_array(cls, arr: np.ndarray):
         """
-        Creates a D8Accumulator from a numpy array
+        Create a D8Accumulator from a numpy array.
 
         Parameters
         ----------
         arr : np.ndarray
             2D array of D8 flow directions
+
         """
         if len(arr.shape) != 2:
             raise ValueError("D8 Array must be 2D")

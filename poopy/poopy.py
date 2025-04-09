@@ -1,22 +1,25 @@
+"""Defines the Event, Monitor, and WaterCompany classes."""
+
 import datetime
+import os
 import warnings
 from abc import ABC, abstractmethod
-from typing import Dict, List, Optional, Union, Tuple
-import os
-import requests
+from typing import Union
 
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 import pooch
-from geojson import MultiLineString, Feature, FeatureCollection, Point
+import requests
+from geojson import Feature, FeatureCollection, MultiLineString, Point
 from matplotlib.colors import LogNorm
 
 from poopy.d8_accumulator import D8Accumulator
 
 
 class Monitor:
-    """A class to represent a CSO monitor.
+    """
+    A class to represent a CSO monitor.
 
     Attributes:
         site_name: The name of the site.
@@ -32,14 +35,16 @@ class Monitor:
 
     Methods:
         print_status: Print the current status of the monitor.
-        get_history: Get the historical discharge information for the monitor and store it in the history attribute.
-        plot_history: Plot the history of events at the monitor. Optionally specify a start date to plot from.
-        total_discharge: Returns the total discharge in minutes since the given datetime.
-        total_discharge_last_6_months: Returns the total discharge in minutes in the last 6 months (183 days)
-        total_discharge_last_12_months: Returns the total discharge in minutes in the last 12 months (365 days)
-        total_discharge_since_start_of_year: Returns the total discharge in minutes since the start of the year
-        event_at: Returns the event that was occurring at the given time for the given monitor (or None).
-        recent_discharge_at: Returns whether there was a discharge event in the preceding 48 hours of a specified time.
+        get_history: Sotre historical discharge information in the history attribute.
+        plot_history: Plot the history of events at the monitor.
+        total_discharge: Returns the total discharge (minutes) since the given datetime.
+        total_discharge_last_6_months: Returns discharge in last 6 months (183 days)
+        total_discharge_last_12_months: Returns discharge in last 12 months (365 days)
+        total_discharge_since_start_of_year: Returns total discharge since start of year
+        event_at: Returns the event that was occurring at given time (or None).
+        recent_discharge_at: Was there a discharge in last 48 hours of a given time.
+        is_on_null_island: Check if the monitor is on Null Island.
+
     """
 
     def __init__(
@@ -50,7 +55,7 @@ class Monitor:
         y_coord: float,
         receiving_watercourse: str,
         water_company: "WaterCompany",
-        discharge_in_last_48h: Optional[bool] = None,
+        discharge_in_last_48h: bool | None = None,
     ) -> None:
         """
         Initialize attributes to describe a CSO monitor.
@@ -62,7 +67,8 @@ class Monitor:
             y_coord: The Y coordinate of the site.
             receiving_watercourse: The receiving watercourse of the site.
             water_company: The water company that the monitor belongs to.
-            discharge_in_last_48h: Whether the monitor has discharged in the last 48 hours.
+            discharge_in_last_48h: Whether the monitor has discharged in last 48 hours.
+
         """
         self._site_name: str = site_name
         self._permit_number: str = permit_number
@@ -72,7 +78,7 @@ class Monitor:
         self._water_company: WaterCompany = water_company
         self._discharge_in_last_48h: bool = discharge_in_last_48h
         self._current_event: Event = None
-        self._history: List[Event] = None
+        self._history: list[Event] = None
 
     @property
     def site_name(self) -> str:
@@ -111,10 +117,12 @@ class Monitor:
 
     @property
     def current_event(self) -> "Event":
-        """Return the current event of the monitor.
+        """
+        Return the current event of the monitor.
 
         Raises:
             ValueError: If the current event is not set.
+
         """
         if self._current_event is None:
             raise ValueError("Current event is not set.")
@@ -122,19 +130,23 @@ class Monitor:
 
     def get_history(self, verbose: bool = False) -> None:
         """
-        Get the historical data for the monitor and store it in the history attribute.
+        Get historical data for the monitor and store it in the history attribute.
 
         Args:
-            verbose: Whether to print the dataframe of API responses when the history is set. Defaults to False.
+            verbose: Whether to print the dataframe of API responses when the history is
+            set. Defaults to False.
+
         """
         self._history = self.water_company._fetch_monitor_history(self, verbose=verbose)
 
     @property
-    def history(self) -> List["Event"]:
-        """Return a list of all past events at the monitor.
+    def history(self) -> list["Event"]:
+        """
+        Return a list of all past events at the monitor.
 
         Raises:
             ValueError: If the history is not yet set.
+
         """
         if self._history is None:
             raise ValueError("History is not yet set!")
@@ -142,21 +154,23 @@ class Monitor:
 
     @property
     def discharge_in_last_48h(self) -> bool:
-        # Raise a warning if the discharge_in_last_48h is not set
+        """Return whether the monitor has discharged in the last 48 hours."""
         if self._discharge_in_last_48h is None:
             warnings.warn(
-                "\033[91m"
-                f"!ADVISORY! Information on discharges in last 48hrs could not be set for '{self.site_name}'. `.discharge_in_last_48h` attribute returns None."
-                + "\033[0m"
+                f"\033[91m!ADVISORY! Information on discharges in last 48hrs could not "
+                f"be set for '{self.site_name}'. `.discharge_in_last_48h` "
+                f"attribute returns None.\033[0m"
             )
         return self._discharge_in_last_48h
 
     @current_event.setter
     def current_event(self, event: "Event") -> None:
-        """Set the current event of the monitor.
+        """
+        Set the current event of the monitor.
 
         Raises:
             ValueError: If the current event is not ongoing.
+
         """
         if not event.ongoing:
             raise ValueError("Current Event must be ongoing.")
@@ -169,9 +183,11 @@ class Monitor:
             print("No current event at this Monitor.")
         self._current_event.print()
 
-    def total_discharge(self, since: datetime.datetime = None) -> float:
-        """Returns the total discharge in minutes since the given datetime.
-        If no datetime is given, it will return the total discharge since records began
+    def total_discharge(self, since: datetime.datetime | None = None) -> float:
+        """
+        Return the total discharge in minutes since the given datetime.
+
+        If no datetime is given, it will return the total discharge since records began.
         """
         history = self.history
         total = 0.0
@@ -181,7 +197,8 @@ class Monitor:
             if event.event_type == "Discharging":
                 if event.ongoing:
                     if event.start_time < since:
-                        # If the start time is before the cut off date, we can take the difference between the current time and the cut off date
+                        # If the start time is before the cut off date, we can take the
+                        # difference between the current time and the cut off date
                         total += (datetime.datetime.now() - since).total_seconds() / 60
                     else:
                         total += event.duration
@@ -189,7 +206,8 @@ class Monitor:
                     # If the end time is before the cut off date, we can skip this event
                     if event.end_time < since:
                         continue
-                    # If the endtime is after since but start_time is before, we take the difference between the end time and since
+                    # If the endtime is after since but start_time is before, we take the
+                    # difference between the end time and since
                     elif (event.end_time > since) and (event.start_time < since):
                         total += (event.end_time - since).total_seconds() / 60
                     elif event.end_time > since:
@@ -197,25 +215,27 @@ class Monitor:
         return total
 
     def total_discharge_last_6_months(self) -> float:
-        """Returns the total discharge in minutes in the last 6 months (183 days)"""
+        """Return the total discharge in minutes in the last 6 months (183 days)."""
         return self.total_discharge(
             since=datetime.datetime.now() - datetime.timedelta(days=183)
         )
 
     def total_discharge_last_12_months(self) -> float:
-        """Returns the total discharge in minutes in the last 12 months (365 days)"""
+        """Return the total discharge in minutes in the last 12 months (365 days)."""
         return self.total_discharge(
             since=datetime.datetime.now() - datetime.timedelta(days=365)
         )
 
     def total_discharge_since_start_of_year(self) -> float:
-        """Returns the total discharge in minutes since the start of the year"""
+        """Return the total discharge in minutes since the start of the year."""
         return self.total_discharge(
             since=datetime.datetime(datetime.datetime.now().year, 1, 1)
         )
 
-    def plot_history(self, since: datetime.datetime = None) -> None:
-        """Plot the history of events at the monitor. Optionally specify a start date to plot from.
+    def plot_history(self, since: datetime.datetime | None = None) -> None:
+        """
+        Plot the history of events at the monitor.
+
         If no start date is specified, it will plot from the first recorded Discharge or Offline event.
         If no events are recorded for that monitor, no plot will be returned and a warning will be raised.
         """
@@ -268,7 +288,8 @@ class Monitor:
 
     def event_at(self, time: datetime.datetime) -> Union[None, "Event"]:
         """
-        Returns the event that is ongoing at the given time for the given monitor.
+        Return the event that is ongoing at the given time for the given monitor.
+
         If no event is found (e.g., the time was before a monitor was installed), it returns None.
 
         Args:
@@ -276,6 +297,7 @@ class Monitor:
 
         Returns:
             The event that is ongoing at the given time for the given monitor.
+
         """
         out = None
         now = datetime.datetime.now()
@@ -304,7 +326,7 @@ class Monitor:
 
     def recent_discharge_at(self, time: datetime.datetime) -> bool:
         """
-        This function checks if there was a discharge event in the preceding 48 hours of a specified time.
+        Check if there was a discharge event in the preceding 48 hours of a specified time.
 
         Args:
             time (datetime.datetime): The time to check for a discharge event.
@@ -314,8 +336,8 @@ class Monitor:
 
         Raises:
             ValueError: If the target time is in the future.
-        """
 
+        """
         now = datetime.datetime.now()
         discharge_in_last_48_hours: bool = False
         # Raise a value error if the target time is in the future
@@ -360,8 +382,8 @@ class Monitor:
         return discharge_in_last_48_hours
 
     def _history_masks(
-        self, times: List[datetime.datetime]
-    ) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
+        self, times: list[datetime.datetime]
+    ) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
         online = np.zeros(len(times), dtype=bool)
         active = np.zeros(len(times), dtype=bool)
         recent = np.zeros(len(times), dtype=bool)
@@ -426,9 +448,26 @@ class Monitor:
 
         return online, active, recent
 
+    def is_on_null_island(self) -> bool:
+        """
+        Check if the monitor is on Null Island (0, 0 lat long).
+
+        Returns:
+            bool: True if the monitor is on Null Island, False otherwise.
+
+        """
+        # Check if the monitor's coordinates are close to the Null Island coordinates (in OSGB)
+        null_island_x, null_island_y = 622575.7031043093, -5527063.8148287395
+
+        return (
+            abs(self.x_coord - null_island_x) < 1e-3
+            and abs(self.y_coord - null_island_y) < 1e-3
+        )
+
 
 class Event(ABC):
-    """A class to represent an event at a CSO monitor.
+    """
+    A class to represent an event at a CSO monitor.
 
     Attributes:
         monitor: The monitor at which the event occurred.
@@ -449,8 +488,8 @@ class Event(ABC):
         monitor: Monitor,
         ongoing: bool,
         start_time: datetime.datetime,
-        end_time: Optional[datetime.datetime] = None,
-        event_type: Optional[str] = "Unknown",
+        end_time: datetime.datetime | None = None,
+        event_type: str | None = "Unknown",
     ) -> None:
         """
         Initialize attributes to describe an event.
@@ -464,6 +503,7 @@ class Event(ABC):
 
         Methods:
             print: Print a summary of the event.
+
         """
         self._monitor = monitor
         self._start_time = start_time
@@ -474,11 +514,13 @@ class Event(ABC):
         self._validate()
 
     def _validate(self):
-        """Validate the attributes of the event.
+        """
+        Validate the attributes of the event.
 
         Raises:
             ValueError: If the end time is before the start time.
             ValueError: If the end time is not None and the event is ongoing.
+
         """
         if self._ongoing and self._end_time is not None:
             raise ValueError("End time must be None if the event is ongoing.")
@@ -503,7 +545,7 @@ class Event(ABC):
         return self._ongoing
 
     @property
-    def start_time(self) -> Optional[datetime.datetime]:
+    def start_time(self) -> datetime.datetime | None:
         """Return the start time of the event."""
         if self._start_time is None:
             warnings.warn(
@@ -514,7 +556,7 @@ class Event(ABC):
         return self._start_time
 
     @property
-    def end_time(self) -> Union[datetime.datetime, None]:
+    def end_time(self) -> datetime.datetime | None:
         """Return the end time of the event."""
         # If the event is Ongoing raise a Warning that the event is ongoing and has no end time but allow program to continue
         if self._ongoing:
@@ -538,7 +580,8 @@ class Event(ABC):
     # Define a setter for ongoing that only allows setting to False. It then sets the end time to the current time, and calculates the duration.
     @ongoing.setter
     def ongoing(self, value: bool) -> None:
-        """Set the ongoing status of the event.
+        """
+        Set the ongoing status of the event.
 
         Args:
             value: The value to set the ongoing status to.
@@ -546,6 +589,7 @@ class Event(ABC):
         Raises:
             ValueError: If the ongoing status is already False.
             ValueError: If the event is already not ongoing.
+
         """
         if value:
             raise ValueError("Ongoing status can only be set to False.")
@@ -559,7 +603,6 @@ class Event(ABC):
 
     def print(self) -> None:
         """Print a summary of the event."""
-
         # Define a dictionary of colours for the event types
         event_type_colour = {
             "Discharging": "\033[31m",  # Red
@@ -584,9 +627,7 @@ class Event(ABC):
         )
 
     def _to_row(self) -> pd.DataFrame:
-        """
-        Convert a discharge event to a row in a dataframe.
-        """
+        """Convert a discharge event to a row in a dataframe."""
         row = pd.DataFrame(
             {
                 "LocationName": self.monitor.site_name,
@@ -608,6 +649,7 @@ class Discharge(Event):
     """A class to represent a discharge event at a CSO."""
 
     def __init__(self, *args, **kwargs) -> None:
+        """Initialize attributes to describe a discharge event."""
         super().__init__(*args, **kwargs)
         self._event_type = "Discharging"
 
@@ -616,6 +658,7 @@ class Offline(Event):
     """A class to represent a CSO monitor being offline."""
 
     def __init__(self, *args, **kwargs) -> None:
+        """Initialize attributes to describe a CSO monitor being offline."""
         super().__init__(*args, **kwargs)
         self._event_type = "Offline"
 
@@ -624,6 +667,7 @@ class NoDischarge(Event):
     """A class to represent a CSO not discharging."""
 
     def __init__(self, *args, **kwargs) -> None:
+        """Initialize attributes to describe a CSO not discharging."""
         super().__init__(*args, **kwargs)
         self._event_type = "Not Discharging"
 
@@ -636,8 +680,8 @@ class WaterCompany(ABC):
         name: The name of the Water Company network (set by the child class).
         timestamp: The timestamp of the last update.
         history_timestamp: The timestamp of the last historical data update (set in the `get_history` method of the child class).
-        clientID: The client ID for the Water Company API (set by the child class).
-        clientSecret: The client secret for the Water Company API (set by the child class).
+        client_id: The client ID for the Water Company API (set by the child class).
+        client_secret: The client secret for the Water Company API (set by the child class).
         alerts_table: The filename of the table that contains (manually generated) alerts.
         build_all_histories_locally: A method to build the history of all active monitors using the manually created alerts table.
         active_monitors: A dictionary of active monitors accessed by site name.
@@ -645,6 +689,7 @@ class WaterCompany(ABC):
         accumulator: The D8 flow accumulator for the region of the water company.
         discharging_monitors: A list of all monitors that are currently recording a discharge event.
         recently_discharging_monitors: A list of all monitors that have discharged in the last 48 hours.
+
     Methods:
         update: Updates the active_monitors list and the timestamp.
         set_all_histories: Sets the historical data for all active monitors and store it in the history attribute of each monitor.
@@ -654,20 +699,22 @@ class WaterCompany(ABC):
         get_historical_downstream_info_geojson: Get a GeoJSON feature collection of more detailed information at the downstream points for discharges *AT A GIVEN HISTORICAL TIME*.
         plot_current_status: Plot the current status of the Water Company network showing the downstream impact & monitor statuses.
         get_historical_downstream_impact_at: Calculates the downstream extent of all monitors that were discharging (or, optionally, recently discharging) at a given time *AT A GIVEN HISTORICAL TIME*.
+
     """
 
-    def __init__(self, clientID: str, clientSecret: str):
+    def __init__(self, client_id: str, client_secret: str):
         """
         Initialize attributes to describe a Water Company network.
 
         Args:
-            clientID: The client ID for the Water Company API.
-            clientSecret: The client secret for the Water Company API.
+            client_id: The client ID for the Water Company API.
+            client_secret: The client secret for the Water Company API.
+
         """
-        self._clientID = clientID
-        self._clientSecret = clientSecret
+        self._client_id = client_id
+        self._client_secret = client_secret
         self._timestamp: datetime.datetime = datetime.datetime.now()
-        self._active_monitors: Dict[str, Monitor] = self._fetch_active_monitors()
+        self._active_monitors: dict[str, Monitor] = self._fetch_active_monitors()
         self._accumulator: D8Accumulator = None
         self._d8_file_path: str = None
         self._history_timestamp: datetime.datetime = (
@@ -675,7 +722,7 @@ class WaterCompany(ABC):
         )
 
     @abstractmethod
-    def _fetch_monitor_history(self, monitor: Monitor) -> List[Event]:
+    def _fetch_monitor_history(self, monitor: Monitor) -> list[Event]:
         """
         Get the history of events for a monitor.
 
@@ -684,20 +731,17 @@ class WaterCompany(ABC):
 
         Returns:
             A list of events.
+
         """
         pass
 
     @abstractmethod
     def set_all_histories(self) -> None:
-        """
-        Sets the historical data for all active monitors and store it in the history attribute of each monitor.
-        """
+        """Set the historical data for all active monitors and store it in the history attribute of each monitor."""
         pass
 
     def _fetch_current_status_df(self) -> pd.DataFrame:
-        """
-        Get the current status of the monitors by calling the API.
-        """
+        """Get the current status of the monitors by calling the API."""
         print(
             "\033[36m"
             + f"Requesting current status data from {self.name} API..."
@@ -719,7 +763,9 @@ class WaterCompany(ABC):
         self, url: str, params: str, verbose: bool = False
     ) -> pd.DataFrame:
         """
-        Creates and handles the response from the API. If the response is valid, return a dataframe of the response.
+        Create and handle the response from the API.
+
+        If the response is valid, return a dataframe of the response.
         Otherwise, raise an exception. This is a helper function for the `_fetch_current_status_df` and `_fetch_monitor_history_df` functions.
         Loops through the API calls until all the records are fetched. If verbose is set to True, the function will print the full dataframe
         to the console.
@@ -744,9 +790,7 @@ class WaterCompany(ABC):
                     df = pd.concat([df, df_temp], ignore_index=True)
             else:
                 raise Exception(
-                    "\tRequest failed with status code {0}, and error message: {1}".format(
-                        response.status_code, response.json()
-                    )
+                    f"\tRequest failed with status code {response.status_code}, and error message: {response.json()}"
                 )
 
             # Increment offset for the next request
@@ -762,28 +806,38 @@ class WaterCompany(ABC):
 
         return df
 
-    def _fetch_active_monitors(self) -> Dict[str, Monitor]:
-        """
-        Returns a dictionary of Monitor objects representing the active monitors.
-        """
+    def _fetch_active_monitors(self) -> dict[str, Monitor]:
+        """Return a dictionary of Monitor objects representing the active monitors."""
         df = self._fetch_current_status_df()
         monitors = {}
         for _, row in df.iterrows():
             monitor = self._row_to_monitor(row=row)
             event = self._row_to_event(row=row, monitor=monitor)
             monitor.current_event = event
-            monitors[monitor.site_name] = monitor
+
+            # Check that the monitor location is sensible:
+            if monitor.is_on_null_island():
+                warnings.warn(
+                    f"\033[91m!ADVISORY! Monitor '{monitor.site_name}' is located on Null Island!"
+                    + "\nSkipping."
+                    + "\nReport this issue to the Water Company!"
+                    + "\033[0m"
+                )
+                # Continue to the next monitor
+                continue
+            else:
+                monitors[monitor.site_name] = monitor
         return monitors
 
     def build_all_histories_locally(self) -> None:
         """
-        Uses the manually created alerts table, built from repeated calls to the current status API, to build the history of all active monitors.
+        Use the manually created alerts table, built from repeated calls to the current status API, to build the history of all active monitors.
+
         Note that this method is only recommended for use when the API is not available or when the historical data is not available from the API.
         The results will only be as good as the alerts table, which is built from repeated calls to the API.
 
         IF YOU HAVE NOT BUILT AN ALERTS TABLE BY REGULARLY CALLING THE API, THIS METHOD WILL NOT PRODUCE SENSIBLE RESULTS AND SHOULD NOT BE USED
         """
-
         # Print a VERY BIG warning in general to say that this method is only recommended if an API is not available and
         # that the results are dependent on the alerts table which is built from repeated calls to the API. If this has
         # not been done the results will be nonsense.
@@ -809,7 +863,7 @@ class WaterCompany(ABC):
         if self.name == "Thames Water":
             warnings.warn(
                 "\033[31m"
-                + f"! ALERT ! This method is not recommended for Thames Water. Use the historical API instead with .set_all_histories()."
+                + "! ALERT ! This method is not recommended for Thames Water. Use the historical API instead with .set_all_histories()."
                 + "\033[0m"
             )
 
@@ -832,7 +886,7 @@ class WaterCompany(ABC):
             warnings.warn(
                 f"\033[31m\n! WARNING ! The following historical monitors are no longer active: {inactive_names}\nStoring historical data for inactive monitors is not currently supported!\nIf this message has appeared it should be implemented...\033[0m "
             )
-        print("\033[36m" + f"Building history for monitors..." + "\033[0m")
+        print("\033[36m" + "Building history for monitors..." + "\033[0m")
         for name in active_names:
             subset = df[df["LocationName"] == name]
             monitor = self.active_monitors[name]
@@ -840,7 +894,9 @@ class WaterCompany(ABC):
 
     def _fetch_d8_file(self, url: str, known_hash: str) -> str:
         """
-        Get the path to the D8 file for the catchment. If the file is not present, it will download it from the given url.
+        Get the path to the D8 file for the catchment.
+
+        If the file is not present, it will download it from the given url.
         This is all handled by the pooch package. The hash of the file is checked against the known hash to ensure the file is not corrupted.
         If the file is already present in the pooch cache, it will not be downloaded again.
         """
@@ -868,14 +924,14 @@ class WaterCompany(ABC):
         return self._history_timestamp
 
     @property
-    def clientID(self) -> str:
+    def client_id(self) -> str:
         """Return the client ID for the API."""
-        return self._clientID
+        return self._client_id
 
     @property
-    def clientSecret(self) -> str:
+    def client_secret(self) -> str:
         """Return the client secret for the API."""
-        return self._clientSecret
+        return self._client_secret
 
     @property
     def alerts_table(self) -> str:
@@ -883,17 +939,17 @@ class WaterCompany(ABC):
         return self._alerts_table
 
     @property
-    def active_monitors(self) -> List[Monitor]:
+    def active_monitors(self) -> list[Monitor]:
         """Return the active monitors."""
         return self._active_monitors
 
     @property
-    def active_monitor_names(self) -> List[str]:
+    def active_monitor_names(self) -> list[str]:
         """Return the names of active monitors."""
         return list(self._active_monitors.keys())
 
     @property
-    def discharging_monitors(self) -> List[Monitor]:
+    def discharging_monitors(self) -> list[Monitor]:
         """Return a list of all monitors that are currently recording a discharge event."""
         return [
             monitor
@@ -902,7 +958,7 @@ class WaterCompany(ABC):
         ]
 
     @property
-    def recently_discharging_monitors(self) -> List[Monitor]:
+    def recently_discharging_monitors(self) -> list[Monitor]:
         """Return a list of all monitors that have discharged in the last 48 hours."""
         return [
             monitor
@@ -918,37 +974,39 @@ class WaterCompany(ABC):
         return self._accumulator
 
     def update(self):
-        """
-        Update the active_monitors list and the timestamp.
-        """
+        """Update the active_monitors list and the timestamp."""
         self._active_monitors = self._fetch_active_monitors()
         self._timestamp = datetime.datetime.now()
 
     def _calculate_downstream_impact(
-        self, source_monitors: List[Monitor]
+        self, source_monitors: list[Monitor]
     ) -> np.ndarray:
         """
-        Given a list of source monitors, returns a 2D array which is the number of upstream discharges at each
-        cell in the DEM.
+        Return a 2D array of the number of upstream discharges at each cell in the DEM.
+
+        Given a list of source monitors, it calculates the number of discharges upstream of each cell in the DEM.
 
         Args:
             source_monitors: A list of Monitors which we want to calculate the downstream impact of
 
         Returns:
             2D numpy array of the domain area showing number of discharges upstream of a given point.
+
         """
         # Extract all the xy coordinates of active discharges
         accumulator = self.accumulator
         # Coords of all sources in OSGB
 
-        source_nodes = [] 
+        source_nodes = []
         for discharge in source_monitors:
             try:
                 source_nodes.append(
                     accumulator.coord_to_node(discharge.x_coord, discharge.y_coord)
                 )
             except ValueError as e:
-                warnings.warn(f"Skipping out of bounds monitor {discharge.site_name}: {e}")
+                warnings.warn(
+                    f"Skipping out of bounds monitor {discharge.site_name}: {e}"
+                )
 
         # Set up the source array for propagating discharges downstream
         source_array = np.zeros(accumulator.arr.shape).flatten()
@@ -961,8 +1019,7 @@ class WaterCompany(ABC):
         self, time: datetime.datetime, include_recent_discharges: bool = False
     ) -> np.ndarray:
         """
-        Calculates the downstream impact of all monitors that were discharging (or, optionally, recently discharging)
-        at the given time.
+        Calculate the downstream impact of all monitors that were discharging at the given time.
 
         Args:
             time: The time to check for discharges.
@@ -970,6 +1027,7 @@ class WaterCompany(ABC):
 
         Returns:
             A 2D numpy array of the domain area showing the number of active/recently active discharges at the given time.
+
         """
         # Create the list of the source monitors that were discharging/recently discharging at the specified time
         sources = self._get_sources_at(time, include_recent_discharges)
@@ -980,7 +1038,9 @@ class WaterCompany(ABC):
         self, include_recent_discharges: bool = False
     ) -> MultiLineString:
         """
-        Get a MultiLineString of the downstream points for all active discharges in BNG coordinates. Note that this
+        Get a MultiLineString of the downstream points for all active discharges in BNG coordinates.
+
+        Note that this
         specific function is largely retained for legacy purposes
 
         Args:
@@ -988,19 +1048,22 @@ class WaterCompany(ABC):
 
         Returns:
             A geojson MultiLineString of the downstream points for all active (or optionally recent) discharges.
+
         """
         # Calculate the downstream impact
         if include_recent_discharges:
             sources = self.recently_discharging_monitors
+            print(f"Type of sources: {type(sources)}")
         else:
             sources = self.discharging_monitors
         downstream_impact = self._calculate_downstream_impact(source_monitors=sources)
         # Convert the downstream impact to a geojson
         return self._accumulator.get_channel_segments(downstream_impact, threshold=0.9)
 
-    def _calculate_downstream_info(self, sources: List[Monitor]) -> FeatureCollection:
+    def _calculate_downstream_info(self, sources: list[Monitor]) -> FeatureCollection:
         """
         Calculate the downstream impact of a list of source monitors and return a GeoJSON FeatureCollection of the downstream points.
+
         Contains information on number of upstream sources, the list of CSOs and the number of CSOs per km2.
 
         Args:
@@ -1008,6 +1071,7 @@ class WaterCompany(ABC):
 
         Returns:
             A GeoJSON FeatureCollection of the downstream points for all active discharges.
+
         """
         # Calculate downstream impact
         impact = self._calculate_downstream_impact(source_monitors=sources)
@@ -1039,8 +1103,10 @@ class WaterCompany(ABC):
             try:
                 node = self.accumulator.coord_to_node(monitor.x_coord, monitor.y_coord)
             except ValueError as e:
-                warnings.warn(f"Skipping out of bounds monitor {monitor.site_name}: {e}")
-                continue                
+                warnings.warn(
+                    f"Skipping out of bounds monitor {monitor.site_name}: {e}"
+                )
+                continue
             dstream, _ = self.accumulator.get_profile(node)
             for node in dstream:
                 dstream_info[node]["CSOs"].append(monitor.site_name)
@@ -1064,7 +1130,7 @@ class WaterCompany(ABC):
 
     def _get_sources_at(
         self, time: datetime.datetime, include_recent_discharges: bool
-    ) -> List[Monitor]:
+    ) -> list[Monitor]:
         """
         Get the sources that were discharging (or, optionally, recently discharging) at the given time.
 
@@ -1077,8 +1143,8 @@ class WaterCompany(ABC):
 
         Raises:
             ValueError: If the target time is in the future.
-        """
 
+        """
         if time > datetime.datetime.now():
             raise ValueError("The target time cannot be in the future.")
         sources = []
@@ -1098,6 +1164,7 @@ class WaterCompany(ABC):
     ) -> FeatureCollection:
         """
         Get a GeoJSON feature collection of the downstream points for all CURRENT active discharges in BNG coordinates.
+
         Contains information on number of upstream sources, the list of CSOs and the number of CSOs per km2.
 
         Args:
@@ -1105,6 +1172,7 @@ class WaterCompany(ABC):
 
         Returns:
             A GeoJSON FeatureCollection of the downstream points for all active discharges.
+
         """
         # Check that "include_recent_discharges" is a boolean
         if not isinstance(include_recent_discharges, bool):
@@ -1121,6 +1189,7 @@ class WaterCompany(ABC):
     ) -> FeatureCollection:
         """
         Get a GeoJSON feature collection of the downstream points for all active discharges in BNG coordinates at a given time in the past.
+
         Contains information on number of upstream sources, the list of CSOs and the number of CSOs per km2.
 
         Args:
@@ -1129,6 +1198,7 @@ class WaterCompany(ABC):
 
         Returns:
             A GeoJSON FeatureCollection of the downstream points for all active discharges at the given time.
+
         """
         # Check that "include_recent_discharges" is a boolean
         if not isinstance(include_recent_discharges, bool):
@@ -1138,14 +1208,11 @@ class WaterCompany(ABC):
 
     def _alerts_df_to_events_list(
         self, df: pd.DataFrame, monitor: Monitor
-    ) -> List[Event]:
-        """
-        Takes a standard dataframe of "Alerts" (e.g., that which would be created by the ThamesWater API or the .update_alerts_table method)
-        and converts it into a list of Events.
-        """
+    ) -> list[Event]:
+        """Take a standard dataframe of "Alerts" and convert it into a list of Events."""
 
         def _warn(reason: str) -> None:
-            """Automatically raises a warning with the correct message"""
+            """Automatically raise a warning with the correct message."""
             warnings.warn(
                 f"\033[91m! WARNING ! Alert stream for monitor {monitor.site_name} contains an invalid entry! \nReason: {reason}. Skipping that entry...\033[0m"
             )
@@ -1247,11 +1314,13 @@ class WaterCompany(ABC):
 
     def get_monitor_timeseries(
         self, since: datetime.datetime
-    ) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
+    ) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
         """
-        Returns a pandas DataFrame containing timeseries of the number of CSOs that 1) were active, 2) were active in last
-        48 hours, 3) online at a list of times every 15 minutes since the given datetime. This can be used to plot the
-        number of active CSOs and monitors over time. NB that for "online" we conservatively assume that every monitor was
+        Return a pandas DataFrame containing timeseries of the number of CSOs that were active over certain timeframes.
+
+        Dataframe containts series of # CSOs that 1) were active, 2) were active in last 48 hours,
+        3) online at a list of times every 15 minutes since the given datetime.This can be used to plot the number of active
+        SOs and monitors over time. NB that for "online" we conservatively assume that every monitor was
         _offline_ until we receive any positive event from it. This means that if a monitor is installed but recording
         'notdischarging' for a month until its first discharge event, it will be counted as offline for that month. Lacking
         any other information, this is the most conservative assumption we can make.
@@ -1265,8 +1334,8 @@ class WaterCompany(ABC):
 
         Raises:
             ValueError: If the history is not yet set. Run set_all_histories() first.
-        """
 
+        """
         if self.history_timestamp is None:
             raise ValueError(
                 "History may not yet be set. Try running set_all_histories() first."
@@ -1300,10 +1369,7 @@ class WaterCompany(ABC):
         )
 
     def plot_current_status(self) -> None:
-        """
-        Plot the current status of the Water Company network.
-        """
-
+        """Plot the current status of the Water Company network."""
         plt.figure(figsize=(11, 8))
         acc = self.accumulator
         geojson = self.get_downstream_geojson(include_recent_discharges=True)
@@ -1352,7 +1418,7 @@ class WaterCompany(ABC):
 
     def history_to_discharge_df(self) -> pd.DataFrame:
         """
-        Convert a water company's discharge history to a dataframe
+        Convert a water company's discharge history to a dataframe.
 
         Returns:
             A dataframe of discharge events.
@@ -1365,7 +1431,7 @@ class WaterCompany(ABC):
             raise ValueError(
                 "History may not yet be set. Try running set_all_histories() first."
             )
-        print("\033[36m" + f"Building output data-table" + "\033[0m")
+        print("\033[36m" + "Building output data-table" + "\033[0m")
         df = pd.DataFrame()
         for monitor in self.active_monitors.values():
             print("\033[36m" + f"\tProcessing {monitor.site_name}" + "\033[0m")
@@ -1380,7 +1446,7 @@ class WaterCompany(ABC):
 
     def history_to_offline_df(self) -> pd.DataFrame:
         """
-        Convert a water company's offline history to a dataframe
+        Convert a water company's offline history to a dataframe.
 
         Returns:
             A dataframe of discharge events.
@@ -1393,7 +1459,7 @@ class WaterCompany(ABC):
             raise ValueError(
                 "History may not yet be set. Try running set_all_histories() first."
             )
-        print("\033[36m" + f"Building output data-table" + "\033[0m")
+        print("\033[36m" + "Building output data-table" + "\033[0m")
         df = pd.DataFrame()
         for monitor in self.active_monitors.values():
             print("\033[36m" + f"\tProcessing {monitor.site_name}" + "\033[0m")
@@ -1408,8 +1474,9 @@ class WaterCompany(ABC):
 
     def update_alerts_table(self, verbose: bool = False) -> None:
         """
-        Function that automatically generates a table of alerts based on the current status of the monitors and changes in status,
-        relative previously created alerts. This function is designed to be run at regular intervals to update the alerts table.
+        Automatically generate a table of alerts based on the current status of the monitors and changes in status.
+
+        This function is designed to be run at regular intervals to update the alerts table.
         The alerts file is stored in '[WaterCompanyName].alerts_table.csv' and contains "alerts" which indicate a change of status
         of a particular monitor. It is modelled on the ThamesWater historical API data.
 
@@ -1431,8 +1498,8 @@ class WaterCompany(ABC):
 
         Args:
             verbose: Whether to print out the changes in status of the monitors. Defaults to False.
-        """
 
+        """
         alerts_filename = self._alerts_table
         # If file doesn't exist initiate it and put in the first alerts
         if not os.path.exists(alerts_filename):
@@ -1723,17 +1790,18 @@ def make_alert_row(
     monitor: Monitor, alert_type: str, datetime_obj: datetime.datetime, note: str = ""
 ) -> pd.DataFrame:
     """
-    Creates an alert row for a given monitor and alert type.
+    Create an alert row for a given monitor and alert type.
 
     Args:
         monitor (Monitor): The monitor object to which the alert belongs.
         alert_type (str): The type of alert (e.g., "Start", "Stop", "Offline start", "Offline stop").
         datetime_obj (datetime.datetime): The datetime object representing the time of the alert.
+        note (str): An optional note to include in the alert row.
 
     Returns:
         pd.DataFrame: A DataFrame containing the alert row.
-    """
 
+    """
     # Check that the alert type is valid
     if alert_type not in ["Start", "Stop", "Offline start", "Offline stop"]:
         raise ValueError("Invalid alert type.")
@@ -1756,9 +1824,7 @@ def make_alert_row(
 
 
 def _make_start_alert_row(monitor: Monitor):
-    """
-    Takes an Event object and returns a row which corresponds to an alert signalling the start of the current event of the monitor.
-    """
+    """Take an Event object and returns a row which corresponds to an alert signalling the start of the current event of the monitor."""
     event = monitor.current_event
     # Determine the alert type based on the event type
     if event.event_type == "Not Discharging":
@@ -1785,23 +1851,17 @@ def _make_start_alert_row(monitor: Monitor):
 
 
 def _make_offline_stop_alert_row(monitor: Monitor, endtime: datetime.datetime):
-    """
-    Makes an alert row corresponding to the end of an offline event.
-    """
+    """Make an alert row corresponding to the end of an offline event."""
     return make_alert_row(monitor, "Offline stop", endtime, note="Imputed")
 
 
 def _make_stop_alert_row(monitor: Monitor, endtime: datetime.datetime):
-    """
-    Makes an alert row corresponding to the end of a discharging event.
-    """
+    """Make an alert row corresponding to the end of a discharging event."""
     return make_alert_row(monitor, "Stop", endtime, note="Imputed")
 
 
 def round_time_down_15(time: datetime.datetime) -> datetime.datetime:
-    """
-    Rounds a datetime down to the nearest 15 minutes.
-    """
+    """Round a datetime down to the nearest 15 minutes."""
     minutes = time.minute
     if minutes < 15:
         minutes = 0
@@ -1815,9 +1875,7 @@ def round_time_down_15(time: datetime.datetime) -> datetime.datetime:
 
 
 def round_time_up_15(time: datetime.datetime) -> datetime.datetime:
-    """
-    Rounds a datetime up to the nearest 15 minutes.
-    """
+    """Round a datetime up to the nearest 15 minutes."""
     minutes = time.minute
     if minutes < 15:
         minutes = 15
@@ -1829,3 +1887,8 @@ def round_time_up_15(time: datetime.datetime) -> datetime.datetime:
         minutes = 0
         time += datetime.timedelta(hours=1)
     return datetime.datetime(time.year, time.month, time.day, time.hour, minutes, 0, 0)
+
+
+def hello_world():
+    """Print hello world to the console."""
+    print("Hello world!")

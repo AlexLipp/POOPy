@@ -1,7 +1,8 @@
-from setuptools import setup, find_packages
-from setuptools.extension import Extension
-from Cython.Build import cythonize
+# ruff: noqa: D100
 import numpy
+from Cython.Build import cythonize
+from setuptools import find_packages, setup
+from setuptools.extension import Extension
 
 extensions = [
     Extension(
