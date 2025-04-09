@@ -160,8 +160,8 @@ def test_thames_water_init():
     """Test the basic initialization of a ThamesWater object."""
     tw = ThamesWater(TW_CLIENTID, TW_CLIENTSECRET)
     assert tw.name == "ThamesWater"
-    assert tw.clientID == TW_CLIENTID
-    assert tw.clientSecret == TW_CLIENTSECRET
+    assert tw.client_id == TW_CLIENTID
+    assert tw.client_secret == TW_CLIENTSECRET
 
     # Check that the accumulator is initialized correctly with the correct extent (in OSGB)
     assert tw.accumulator.extent == [319975.0, 620025.0, 79975.0, 280025.0]
@@ -173,8 +173,8 @@ def test_southern_water_init():
     """Test the basic initialization of a SouthernWater object."""
     sw = SouthernWater()
     assert sw.name == "SouthernWater"
-    assert sw.clientID == ""
-    assert sw.clientSecret == ""
+    assert sw.client_id == ""
+    assert sw.client_secret == ""
 
     # # Now test some specifics to do with how we interpret the data from Southern Water
     # # NB: The following is now obsolete as we no longer use "StatusStart" as it seems to be unreliable (i.e., this test kept failing!!!)
@@ -210,8 +210,8 @@ def test_welsh_water_init():
     """Test the basic initialization of a WelshWater object."""
     ww = WelshWater()
     assert ww.name == "WelshWater"
-    assert ww.clientID == ""
-    assert ww.clientSecret == ""
+    assert ww.client_id == ""
+    assert ww.client_secret == ""
 
     # Check that the accumulator is initialized correctly with the correct extent (in OSGB)
     assert ww.accumulator.extent == [159975.0, 499975.0, 160025.0, 400025.0]
@@ -223,8 +223,8 @@ def test_anglian_water_init():
     """Test the basic initialization of a AnglianWater object."""
     aw = AnglianWater()
     assert aw.name == "AnglianWater"
-    assert aw.clientID == ""
-    assert aw.clientSecret == ""
+    assert aw.client_id == ""
+    assert aw.client_secret == ""
 
     # Check that the accumulator is initialized correctly with the correct extent (in OSGB)
     assert aw.accumulator.extent == [439975.0, 659975.0, 170025.0, 430025.0]
@@ -236,8 +236,8 @@ def test_wessex_water_init():
     """Test the basic initialization of a WessexWater object."""
     wxw = WessexWater()
     assert wxw.name == "WessexWater"
-    assert wxw.clientID == ""
-    assert wxw.clientSecret == ""
+    assert wxw.client_id == ""
+    assert wxw.client_secret == ""
 
     # Check that the accumulator is initialized correctly with the correct extent (in OSGB)
     assert wxw.accumulator.extent == [279975.0, 429975.0, 65025.0, 202025.0]
@@ -275,8 +275,8 @@ def test_southwest_water_init():
     """Test the basic initialization of a WessexWater object."""
     sww = SouthWestWater()
     assert sww.name == "SouthWest Water"
-    assert sww.clientID == ""
-    assert sww.clientSecret == ""
+    assert sww.client_id == ""
+    assert sww.client_secret == ""
 
     # Now test some specifics to do with how we interpret the data from South West Water
     sww_df = sww._fetch_current_status_df()
@@ -311,8 +311,8 @@ def test_united_utilities_init():
     """Test the basic initialization of a UnitedUtilities object."""
     uu = UnitedUtilities()
     assert uu.name == "United Utilities"
-    assert uu.clientID == ""
-    assert uu.clientSecret == ""
+    assert uu.client_id == ""
+    assert uu.client_secret == ""
 
     # For UU we use LatestStart and LatestEnd rather than StatusStart (which is unreliable for UU).
     # So we don't need to test the StatusStart attribute.
@@ -327,8 +327,8 @@ def test_yorkshire_water_init():
     """Test the basic initialization of a YorkshireWater object."""
     yw = YorkshireWater()
     assert yw.name == "Yorkshire Water"
-    assert yw.clientID == ""
-    assert yw.clientSecret == ""
+    assert yw.client_id == ""
+    assert yw.client_secret == ""
 
     # Now test some specifics to do with how we interpret the data from Yorkshire Water
     yw_df = yw._fetch_current_status_df()
@@ -363,8 +363,8 @@ def test_northunbrian_water_init():
     """Test the basic initialization of a NorthumbrianWater object."""
     nw = NorthumbrianWater()
     assert nw.name == "Northumbrian Water"
-    assert nw.clientID == ""
-    assert nw.clientSecret == ""
+    assert nw.client_id == ""
+    assert nw.client_secret == ""
 
     # Now test some specifics to do with how we interpret the data from Yorkshire Water
     # nw_df = nw._fetch_current_status_df()
@@ -401,8 +401,8 @@ def test_severn_trent_water_init():
     """Test the basic initialization of a SevernTrentWater object."""
     stw = SevernTrentWater()
     assert stw.name == "SevernTrent Water"
-    assert stw.clientID == ""
-    assert stw.clientSecret == ""
+    assert stw.client_id == ""
+    assert stw.client_secret == ""
 
     # Now test some specifics to do with how we interpret the data from Yorkshire Water
     stw_df = stw._fetch_current_status_df()
