@@ -11,6 +11,8 @@ on:
 jobs:
   test:
     runs-on: ubuntu-latest
+    container:
+      image: ghcr.io/osgeo/gdal:ubuntu-full-3.10.3 # Use the GDAL container image
 
     steps:
     - name: Checkout code
@@ -19,14 +21,9 @@ jobs:
     - name: Set up Python
       uses: actions/setup-python@v4
       with:
-        python-version: '3.13.2' # Specify your Python version
+        python-version: '3.13.2'  # Specify your Python version
 
-    - name: Install system dependencies
-      run: |
-        sudo apt-get update
-        sudo apt-get install -y libgdal-dev
-
-    - name: Install Python dependencies
+    - name: Install dependencies
       run: |
         python -m pip install --upgrade pip
         pip install .
