@@ -1,11 +1,11 @@
 repos:
   - repo: https://github.com/psf/black
-    rev: 25.1.0 # Replace with the latest version!
+    rev: 25.1.0 
     hooks:
       - id: black
 
   - repo: https://github.com/charliermarsh/ruff-pre-commit
-    rev: v0.11.4  # Use the latest Ruff version
+    rev: v0.11.4 
     hooks:
       - id: ruff
-        args: ["--fix"] 
+        args: ["--fix"]  # Automatically fix issues where possible

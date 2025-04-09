@@ -1887,3 +1887,8 @@ def round_time_up_15(time: datetime.datetime) -> datetime.datetime:
         minutes = 0
         time += datetime.timedelta(hours=1)
     return datetime.datetime(time.year, time.month, time.day, time.hour, minutes, 0, 0)
+
+
+def hello_world():
+    """Print hello world to the console."""
+    print("Hello world!")
