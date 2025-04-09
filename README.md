@@ -1,5 +1,5 @@
 [![Black](https://img.shields.io/badge/code%20style-black-000000?logo=python&logoColor=white)](https://github.com/psf/black)
-[![Ruff](https://img.shields.io/badge/lint-Ruff%20(E%2C%20F%2C%20I%2C%20D%2C%20N)-blueviolet?logo=python&logoColor=white)](https://github.com/astral-sh/ruff)
+[![Ruff](https://img.shields.io/badge/lint-Ruff%20(E%2C%20F%2C%20I%2C%20D%2C%20N%2C%20UP)-blueviolet?logo=python&logoColor=white)](https://github.com/astral-sh/ruff)
 [![pre-commit](https://img.shields.io/badge/pre--commit-enabled-brightgreen?logo=pre-commit&logoColor=white)](https://pre-commit.com/)
 ![License: GPL v3](https://img.shields.io/badge/License-GPLv3-blue.svg)
 
@@ -15,8 +15,10 @@
 - [Usage](#usage)
     - [Examples](#examples)
     - [Gallery](#gallery)
+- [Contributing](#contributing)
 - [Credit](#credit)
 - [Disclaimer](#disclaimer)
+
 
 ## Description
 
@@ -129,6 +131,26 @@ monitor.plot_history()
 
 ![image](https://github.com/AlexLipp/POOPy/assets/10188895/8c631231-bf9c-406e-a393-4d1a72d355b3)
 
+## Contributing 
+
+Contributions are very welcome! Take a look at the issues tab, or reach to us if you have suggestions or features. Or, just dive straight in.
+
+### Code Style & Formatting
+This repository uses automatic code formatting and linting. To ensure consistency in the codebase, tools are run automatically on pre-commit. Before you commit, the following hooks will automatically run:
+
+- [Black](https://github.com/psf/black): Automatically formats your code to adhere to the Black code style.
+- [Ruff](https://github.com/astral-sh/ruff): Automatically runs a linter on your code to catch style issues, errors, and potential bugs.
+
+To set up the pre-commit hooks and ensure your code is formatted and linted before committing, run the following:
+1. Install pre-commit if you haven’t already: `pip install pre-commit`
+2. Install the hooks: `pre-commit install`
+Now the checks will automatically run when you `commit`, but you can: 
+3. Test them manually with:  `pre-commit run --all-files`
+
+The settings for these linters is detailed in `.pre-commit-config.yaml`.
+
+### Unit testing 
+The same pre-commit will also run the unit-tests detailed above. `pytest` will be required. This ensures that the code-base only contains code that passes the unit-tests.
 
 ## Credit
 
