@@ -1,5 +1,6 @@
 """
-This module provides classes for interacting with the EDM APIs of various water companies.
+Provides classes for interacting with the EDM APIs of various water companies.
+
 Each WaterCompany subclass is responsible for interacting with the API of a specific water company.
 Each Water Company (unhelpfully) has _slightly_ different methods for interacting with very similar data.
 As a result, there is quite a lot of code duplication between the classes, however, there are also enough
@@ -9,10 +10,10 @@ have opted for the current design of having separate classes for each water comp
 for more flexibility in the future if the APIs change and require different methods of interaction.
 """
 
+import warnings
+from collections.abc import Callable
 from datetime import datetime, timedelta
 from multiprocessing import Pool
-from typing import Callable, Dict, List, Tuple
-import warnings
 
 import pandas as pd
 import requests
@@ -22,9 +23,7 @@ from poopy.poopy import Discharge, Event, Monitor, NoDischarge, Offline, WaterCo
 
 
 class ThamesWater(WaterCompany):
-    """
-    A subclass of `WaterCompany` that represents the EDM monitoring network for Thames Water.
-    """
+    """A subclass of `WaterCompany` that represents the EDM monitoring network for Thames Water."""
 
     API_ROOT = "https://prod-tw-opendata-app.uk-e1.cloudhub.io"
     CURRENT_API_RESOURCE = "/data/STE/v1/DischargeCurrentStatus"
@@ -44,10 +43,11 @@ class ThamesWater(WaterCompany):
     D8_FILE_URL = "https://zenodo.org/records/14238014/files/thames_d8.nc?download=1"
     D8_FILE_HASH = "md5:1047a14906237cd436fd483e87c1647d"
 
-    def __init__(self, clientID: str, clientSecret: str):
+    def __init__(self, client_id: str, client_secret: str):
+        """Initialise a Thames Water object."""
         print("\033[36m" + "Initialising Thames Water object..." + "\033[0m")
         self._name = "ThamesWater"
-        super().__init__(clientID, clientSecret)
+        super().__init__(client_id, client_secret)
         self._d8_file_path = self._fetch_d8_file(
             url=self.D8_FILE_URL,
             known_hash=self.D8_FILE_HASH,
@@ -56,10 +56,7 @@ class ThamesWater(WaterCompany):
         self._alerts_table_update_list = f"{self._name}_alerts_update_list.dat"
 
     def set_all_histories(self) -> None:
-        """
-        Sets the historical data for all active monitors and store it in the history attribute of each monitor.
-        A faster version of this function is available in the `set_all_histories_parallel` method.
-        """
+        """Set the historical data for all active monitors and store it in the history attribute of each monitor."""
         self._history_timestamp = datetime.now()
         df = self._fetch_all_monitors_history_df()
         historical_names = df["LocationName"].unique().tolist()
@@ -71,17 +68,17 @@ class ThamesWater(WaterCompany):
             warnings.warn(
                 f"\033[31m\n! WARNING ! The following historical monitors are no longer active: {inactive_names}\nStoring historical data for inactive monitors is not currently supported!\nIf this message has appeared it should be implemented...\033[0m "
             )
-        print("\033[36m" + f"Building history for monitors..." + "\033[0m")
+        print("\033[36m" + "Building history for monitors..." + "\033[0m")
         for name in active_names:
             subset = df[df["LocationName"] == name]
             monitor = self.active_monitors[name]
             monitor._history = self._alerts_df_to_events_list(subset, monitor)
 
     def set_all_histories_parallel(self) -> None:
-        """
-        Sets the historical data for all active monitors and store it in the history attribute of each monitor.
-        Faster than the `set_all_histories` method if multiple cores are available.
-        """
+        """Set the historical data for all active monitors and store it in the history attribute of each monitor in parallel."""
+        raise warnings.warn(
+            "\033[31m\n! WARNING ! The parallel version of this function is experimental and not recommended...\033[0m "
+        )
         self._history_timestamp = datetime.datetime.now()
         df = self._fetch_all_monitors_history_df()
         historical_names = df["LocationName"].unique().tolist()
@@ -93,7 +90,7 @@ class ThamesWater(WaterCompany):
             warnings.warn(
                 f"\033[31m\n! WARNING ! The following historical monitors are no longer active: {inactive_names}\nStoring historical data for inactive monitors is not currently supported!\nIf this message has appeared it should be implemented...\033[0m "
             )
-        print("\033[36m" + f"Building history for monitors..." + "\033[0m")
+        print("\033[36m" + "Building history for monitors..." + "\033[0m")
 
         # Prepare arguments for parallel processing
         args_list = [
@@ -110,9 +107,7 @@ class ThamesWater(WaterCompany):
             self.active_monitors[name]._history = history
 
     def _fetch_current_status_df(self) -> pd.DataFrame:
-        """
-        Get the current status of the monitors by calling the API.
-        """
+        """Get the current status of the monitors by calling the API."""
         print(
             "\033[36m"
             + "Requesting current status data from Thames Water API..."
@@ -128,12 +123,10 @@ class ThamesWater(WaterCompany):
         return df
 
     def _fetch_all_monitors_history_df(self) -> pd.DataFrame:
-        """
-        Get the historical status of all monitors by calling the API.
-        """
+        """Get the historical status of all monitors by calling the API."""
         print(
             "\033[36m"
-            + f"Requesting historical data for all monitors from Thames Water API..."
+            + "Requesting historical data for all monitors from Thames Water API..."
             + "\033[0m"
         )
         url = self.API_ROOT + self.HISTORICAL_API_RESOURCE
@@ -150,6 +143,7 @@ class ThamesWater(WaterCompany):
     ) -> pd.DataFrame:
         """
         Get the historical status of a particular monitor by calling the API.
+
         If verbose is set to True, the function will print the dataframe of the full API response to the console.
         """
         print(
@@ -176,7 +170,9 @@ class ThamesWater(WaterCompany):
         self, url: str, params: str, verbose: bool = False
     ) -> pd.DataFrame:
         """
-        Creates and handles the response from the API. If the response is valid, return a dataframe of the response.
+        Create and handles the response from the API.
+
+        If the response is valid, return a dataframe of the response.
         Otherwise, raise an exception. This is a helper function for the `_fetch_current_status_df` and `_fetch_monitor_history_df` functions.
         Loops through the API calls until all the records are fetched. If verbose is set to True, the function will print the full dataframe
         to the console.
@@ -186,8 +182,8 @@ class ThamesWater(WaterCompany):
             r = requests.get(
                 url,
                 headers={
-                    "client_id": self.clientID,
-                    "client_secret": self.clientSecret,
+                    "client_id": self.client_id,
+                    "client_secret": self.client_secret,
                 },
                 params=params,
             )
@@ -204,9 +200,7 @@ class ThamesWater(WaterCompany):
                     df_temp = pd.json_normalize(response["items"])
             else:
                 raise Exception(
-                    "\tRequest failed with status code {0}, and error message: {1}".format(
-                        r.status_code, r.json()
-                    )
+                    f"\tRequest failed with status code {r.status_code}, and error message: {r.json()}"
                 )
             df = pd.concat([df, df_temp])
             params["offset"] += params["limit"]  # Increment offset for the next request
@@ -224,7 +218,9 @@ class ThamesWater(WaterCompany):
 
     def _handle_history_api_response(self, url: str, params: str) -> pd.DataFrame:
         """
-        Creates and handles the response from the API. If the response is valid, it returns a dataframe of the response.
+        Createsand handles the response from the API.
+
+        If the response is valid, it returns a dataframe of the response.
         Otherwise, it raises an exception. The function loops through the API calls until a record is returned that has a datetime
         that exceeds the `HISTORY_VALID_UNTIL` date. This differs from the `handle_api_response` function in that it does not try
         to fetch all records, but only those until a certain date. This allows for more elegant handling of the error whereby the
@@ -238,9 +234,7 @@ class ThamesWater(WaterCompany):
         """
         print(
             "\033[36m"
-            + "\tRequesting historical events since {0}...".format(
-                self.HISTORY_VALID_UNTIL
-            )
+            + f"\tRequesting historical events since {self.HISTORY_VALID_UNTIL}..."
             + "\033[0m"
         )
         df = pd.DataFrame()
@@ -248,8 +242,8 @@ class ThamesWater(WaterCompany):
             r = requests.get(
                 url,
                 headers={
-                    "client_id": self.clientID,
-                    "client_secret": self.clientSecret,
+                    "client_id": self.client_id,
+                    "client_secret": self.client_secret,
                 },
                 params=params,
             )
@@ -267,9 +261,7 @@ class ThamesWater(WaterCompany):
                     # ...Maybe if last record returned is really close to HISTORY_VALID_UNTIL then don't raise an exception.
                     # Cannot just return records because it gives false impression that all records have been fetched.
                     raise Exception(
-                        "\n\t!ERROR! \n\tAPI returned no items for request: {0} \n\t! ABORTING !".format(
-                            r.url
-                        )
+                        f"\n\t!ERROR! \n\tAPI returned no items for request: {r.url} \n\t! ABORTING !"
                         + "\n\t"
                         + "-" * 80
                         + "\n\tThis error is *probably* caused by the API erroneously returning an empty response in place of an error..."
@@ -279,9 +271,7 @@ class ThamesWater(WaterCompany):
                         + "\n\tIf you think this is the case, try using the _handle_current_api_response function instead or modifying HISTORY_VALID_UNTIL."
                         + "\n\t"
                         + "-" * 80
-                        + "\n\tNumber of records fetched before error: {0}".format(
-                            nrecords
-                        )
+                        + f"\n\tNumber of records fetched before error: {nrecords}"
                     )
                 else:
                     df_temp = pd.json_normalize(response["items"])
@@ -290,9 +280,7 @@ class ThamesWater(WaterCompany):
                     if last_record_datetime < self.HISTORY_VALID_UNTIL:
                         print(
                             "\033[36m"
-                            + "\tFound a record with datetime {0} before `valid until' date {1}.".format(
-                                last_record_datetime, self.HISTORY_VALID_UNTIL
-                            )
+                            + f"\tFound a record with datetime {last_record_datetime} before `valid until' date {self.HISTORY_VALID_UNTIL}."
                             + "\033[0m"
                         )
 
@@ -301,9 +289,7 @@ class ThamesWater(WaterCompany):
                             # If the number of records is less than the API limit, then we have fetched all records
                             print(
                                 "\033[36m"
-                                + "\tLast request contained {0} many records, fewer than the API limit of {1}.".format(
-                                    df_temp.shape[0], self.API_LIMIT
-                                )
+                                + f"\tLast request contained {df_temp.shape[0]} many records, fewer than the API limit of {self.API_LIMIT}."
                                 + "\033[0m"
                             )
                             print(
@@ -315,9 +301,7 @@ class ThamesWater(WaterCompany):
                             # If the number of records is equal to the API limit, possibly more records to fetch so we continue.
                             print(
                                 "\033[36m"
-                                + "\tLast request contained {0} many records, equal to the API limit of {1}.".format(
-                                    df_temp.shape[0], self.API_LIMIT
-                                )
+                                + f"\tLast request contained {df_temp.shape[0]} many records, equal to the API limit of {self.API_LIMIT}."
                                 + "\033[0m"
                             )
                             print(
@@ -327,9 +311,7 @@ class ThamesWater(WaterCompany):
                             )
             else:
                 raise Exception(
-                    "\tRequest failed with status code {0}, and error message: {1}".format(
-                        r.status_code, r.json()
-                    )
+                    f"\tRequest failed with status code {r.status_code}, and error message: {r.json()}"
                 )
             df = pd.concat([df, df_temp])
             params["offset"] += params["limit"]  # Increment offset for the next request
@@ -338,9 +320,10 @@ class ThamesWater(WaterCompany):
 
     def _fetch_monitor_history(
         self, monitor: Monitor, verbose: bool = False
-    ) -> List[Event]:
+    ) -> list[Event]:
         """
-        Creates a list of historical Event objects from the alert stream for a given monitor.
+        Create a list of historical Event objects from the alert stream for a given monitor.
+
         This is done by iterating through the alert stream and creating an Event object for each
         start/stop event pair. If the alert stream is invalid, a warning is raised and the entry is skipped.
         If the alert stream is empty, an empty list is returned. Optionally prints the full dataframe
@@ -352,6 +335,7 @@ class ThamesWater(WaterCompany):
 
         Returns:
             List[Event]: A list of Event objects representing the historical events for the monitor
+
         """
         # Get the historical data for the monitor from the API
         events_df = self._fetch_monitor_events_df(monitor, verbose=verbose)
@@ -359,7 +343,9 @@ class ThamesWater(WaterCompany):
 
     def _row_to_monitor(self, row: pd.DataFrame) -> Monitor:
         """
-        Convert a row of the Thames Water active API response to a Monitor object. See `_fetch_current_status_df`
+        Convert a row of the Thames Water active API response to a Monitor object.
+
+        See `_fetch_current_status_df`
         """
         monitor = Monitor(
             site_name=row["LocationName"],
@@ -374,7 +360,9 @@ class ThamesWater(WaterCompany):
 
     def _row_to_event(self, row: pd.DataFrame, monitor: Monitor) -> Event:
         """
-        Convert a row of the Thames Water active API response to an Event object. See `_fetch_current_status_df`
+        Convert a row of the Thames Water active API response to an Event object.
+
+        See `_fetch_current_status_df`
         """
         if row["AlertStatus"] == "Discharging":
             event = Discharge(
@@ -406,7 +394,8 @@ class ThamesWater(WaterCompany):
 
 class WelshWater(WaterCompany):
     """
-    Creates an object to interact with the WelshWater EDM API.
+    Create an object to interact with the WelshWater EDM API.
+
     There is no auth on this endpoint required currently.
     There is only a current status endpoint, no historical endpoint available.
     """
@@ -421,11 +410,12 @@ class WelshWater(WaterCompany):
     D8_FILE_URL = "https://zenodo.org/records/14238014/files/welsh_d8.nc?download=1"
     D8_FILE_HASH = "md5:8c965ad0597929df3bc54bc728ed8404"
 
-    def __init__(self, clientID="", clientSecret=""):
-        # No auth required for this API so no need to pass in clientID and clientSecret
+    def __init__(self, client_id="", client_secret=""):
+        """Initialise a Welsh Water object."""
+        # No auth required for this API so no need to pass in client_id and client_secret
         print("\033[36m" + "Initialising Welsh Water object..." + "\033[0m")
         self._name = "WelshWater"
-        super().__init__(clientID, clientSecret)
+        super().__init__(client_id, client_secret)
         self._d8_file_path = self._fetch_d8_file(
             url=self.D8_FILE_URL,
             known_hash=self.D8_FILE_HASH,
@@ -434,9 +424,7 @@ class WelshWater(WaterCompany):
         self._alerts_table_update_list = f"{self._name}_alerts_update_list.dat"
 
     def _fetch_current_status_df(self) -> pd.DataFrame:
-        """
-        Get the current status of the monitors by calling the API.
-        """
+        """Get the current status of the monitors by calling the API."""
         print(
             "\033[36m"
             + "Requesting current status data from Welsh Water API..."
@@ -454,7 +442,9 @@ class WelshWater(WaterCompany):
 
     def _handle_current_api_response(self, url: str, params: str) -> pd.DataFrame:
         """
-        Creates and handles the response from the API. If the response is valid, return a dataframe of the response.
+        Create and handles the response from the API.
+
+        If the response is valid, return a dataframe of the response.
         Otherwise, raise an exception. This is a helper function for the `_fetch_current_status_df` (and `_fetch_monitor_history_df` not implemented for WW) functions.
         """
         df = pd.DataFrame()
@@ -479,26 +469,20 @@ class WelshWater(WaterCompany):
                     df = pd.concat([df, df_temp])
         else:
             raise Exception(
-                "\tRequest failed with status code {0}, and error message: {1}".format(
-                    r.status_code, r.json()
-                )
+                f"\tRequest failed with status code {r.status_code}, and error message: {r.json()}"
             )
         df.reset_index(drop=True, inplace=True)
         # if number of rows is exactly the API limit, there may be more records to fetch so print a warning
         if df.shape[0] == self.API_LIMIT:
             warnings.warn(
                 "\033[36m"
-                + "\tNumber of records fetched is equal to the API limit of {0}. There may be missing records!".format(
-                    self.API_LIMIT
-                )
+                + f"\tNumber of records fetched is equal to the API limit of {self.API_LIMIT}. There may be missing records!"
                 + "\033[0m"
             )
         return df
 
-    def _fetch_monitor_history(self, monitor: Monitor) -> List[Event]:
-        """
-        Not available for WW API.
-        """
+    def _fetch_monitor_history(self, monitor: Monitor) -> list[Event]:
+        """Not available for WW API."""
         # Print a helpful message to the user that this function is not available for this API
         print(
             "\033[36m"
@@ -509,9 +493,7 @@ class WelshWater(WaterCompany):
         return
 
     def set_all_histories(self) -> None:
-        """
-        Not available for WW API.
-        """
+        """Not available for WW API."""
         # Print a helpful message to the user that this function is not available for this API
         print(
             "\033[36m"
@@ -523,7 +505,9 @@ class WelshWater(WaterCompany):
 
     def _row_to_monitor(self, row: pd.DataFrame) -> Monitor:
         """
-        Convert a row of the Welsh Water active API response to a Monitor object. See `_fetch_current_status_df`
+        Convert a row of the Welsh Water active API response to a Monitor object.
+
+        See `_fetch_current_status_df`
         """
         current_time = (
             self._timestamp
@@ -552,7 +536,9 @@ class WelshWater(WaterCompany):
 
     def _row_to_event(self, row: pd.DataFrame, monitor: Monitor) -> Event:
         """
-        Convert a row of the Welsh Water active API response to an Event object. See `_fetch_current_status_df`
+        Convert a row of the Welsh Water active API response to an Event object.
+
+        See `_fetch_current_status_df`
         """
         if row["status"] == "Overflow Operating":
             event = Discharge(
@@ -592,7 +578,8 @@ class WelshWater(WaterCompany):
 
 class SouthernWater(WaterCompany):
     """
-    Creates an object to interact with the SouthernWater EDM API.
+    Create an object to interact with the SouthernWater EDM API.
+
     There is no auth on this endpoint required currently.
     There is only a current status endpoint, no historical endpoint available.
     """
@@ -607,11 +594,12 @@ class SouthernWater(WaterCompany):
     D8_FILE_URL = "https://zenodo.org/records/14238014/files/southern_d8.nc?download=1"
     D8_FILE_HASH = "md5:4696dfce4e1c4cdc0479af03e6b38106"
 
-    def __init__(self, clientID="", clientSecret=""):
-        # No auth required for this API so no need to pass in clientID and clientSecret
+    def __init__(self, client_id="", client_secret=""):
+        """Initialise a Southern Water object."""
+        # No auth required for this API so no need to pass in client_id and client_secret
         print("\033[36m" + "Initialising Southern Water object..." + "\033[0m")
         self._name = "SouthernWater"
-        super().__init__(clientID, clientSecret)
+        super().__init__(client_id, client_secret)
         self._d8_file_path = self._fetch_d8_file(
             url=self.D8_FILE_URL,
             known_hash=self.D8_FILE_HASH,
@@ -619,10 +607,8 @@ class SouthernWater(WaterCompany):
         self._alerts_table = f"{self._name}_alerts.csv"
         self._alerts_table_update_list = f"{self._name}_alerts_update_list.dat"
 
-    def _fetch_monitor_history(self, monitor: Monitor) -> List[Event]:
-        """
-        Not available for Southern API.
-        """
+    def _fetch_monitor_history(self, monitor: Monitor) -> list[Event]:
+        """Not available for Southern API."""
         print(
             "\033[36m"
             + "This function is not available for the Southern Water API."
@@ -632,9 +618,7 @@ class SouthernWater(WaterCompany):
         return
 
     def set_all_histories(self) -> None:
-        """
-        Not available for Southern API.
-        """
+        """Not available for Southern API."""
         print(
             "\033[36m"
             + "This function is not available for the Southern Water API."
@@ -645,7 +629,9 @@ class SouthernWater(WaterCompany):
 
     def _row_to_monitor(self, row: pd.DataFrame) -> Monitor:
         """
-        Convert a row of the Southern Water active API response to a Monitor object. See `_fetch_current_status_df`
+        Convert a row of the Southern Water active API response to a Monitor object.
+
+        See `_fetch_current_status_df`
         """
         current_time = (
             self._timestamp
@@ -698,7 +684,9 @@ class SouthernWater(WaterCompany):
 
     def _row_to_event(self, row: pd.DataFrame, monitor: Monitor) -> Event:
         """
-        Convert a row of the Southern Water active API response to an Event object. See `_fetch_current_status_df`
+        Convert a row of the Southern Water active API response to an Event object.
+
+        See `_fetch_current_status_df`
         """
         if row["Status"] == 1:
             event = Discharge(
@@ -730,7 +718,8 @@ class SouthernWater(WaterCompany):
 
 class AnglianWater(WaterCompany):
     """
-    Creates an object to interact with the AnglianWater EDM API.
+    Create an object to interact with the AnglianWater EDM API.
+
     There is no auth on this endpoint required currently.
     There is only a current status endpoint, no historical endpoint available.
     """
@@ -742,11 +731,12 @@ class AnglianWater(WaterCompany):
     D8_FILE_URL = "https://zenodo.org/records/14238014/files/anglian_d8.nc?download=1"
     D8_FILE_HASH = "md5:a053da23a0305b36856f38f4a5e59e10"
 
-    def __init__(self, clientID="", clientSecret=""):
-        # No auth required for this API so no need to pass in clientID and clientSecret
+    def __init__(self, client_id="", client_secret=""):
+        """Initialise an Anglian Water object."""
+        # No auth required for this API so no need to pass in client_id and client_secret
         print("\033[36m" + "Initialising Anglian Water object..." + "\033[0m")
         self._name = "AnglianWater"
-        super().__init__(clientID, clientSecret)
+        super().__init__(client_id, client_secret)
         self._d8_file_path = self._fetch_d8_file(
             url=self.D8_FILE_URL,
             known_hash=self.D8_FILE_HASH,
@@ -754,10 +744,8 @@ class AnglianWater(WaterCompany):
         self._alerts_table = f"{self._name}_alerts.csv"
         self._alerts_table_update_list = f"{self._name}_alerts_update_list.dat"
 
-    def _fetch_monitor_history(self, monitor: Monitor) -> List[Event]:
-        """
-        Not available for Anglian Water API.
-        """
+    def _fetch_monitor_history(self, monitor: Monitor) -> list[Event]:
+        """Not available for Anglian Water API."""
         print(
             "\033[36m"
             + "This function is not available for the Anglian Water API."
@@ -767,9 +755,7 @@ class AnglianWater(WaterCompany):
         return
 
     def set_all_histories(self) -> None:
-        """
-        Not available for Anglian Water API.
-        """
+        """Not available for Anglian Water API."""
         print(
             "\033[36m"
             + "This function is not available for the Anglian Water API."
@@ -780,7 +766,9 @@ class AnglianWater(WaterCompany):
 
     def _row_to_monitor(self, row: pd.DataFrame) -> Monitor:
         """
-        Convert a row of the Anglian Water active API response to a Monitor object. See `_fetch_current_status_df`
+        Convert a row of the Anglian Water active API response to a Monitor object.
+
+        See `_fetch_current_status_df`
         """
         current_time = (
             self._timestamp
@@ -833,7 +821,9 @@ class AnglianWater(WaterCompany):
 
     def _row_to_event(self, row: pd.DataFrame, monitor: Monitor) -> Event:
         """
-        Convert a row of the Anglian Water active API response to an Event object. See `_fetch_current_status_df`
+        Convert a row of the Anglian Water active API response to an Event object.
+
+        See `_fetch_current_status_df`
         """
         if row["Status"] == 1:
             event = Discharge(
@@ -865,7 +855,8 @@ class AnglianWater(WaterCompany):
 
 class WessexWater(WaterCompany):
     """
-    Creates an object to interact with the WessexWater EDM API.
+    Create an object to interact with the WessexWater EDM API.
+
     There is no auth on this endpoint required currently.
     There is only a current status endpoint, no historical endpoint available.
     """
@@ -878,11 +869,12 @@ class WessexWater(WaterCompany):
     D8_FILE_URL = "https://zenodo.org/records/14238014/files/wessex_d8.nc?download=1"
     D8_FILE_HASH = "md5:ad906953e7cbb8ff816068c5308dadc3"
 
-    def __init__(self, clientID="", clientSecret=""):
-        # No auth required for this API so no need to pass in clientID and clientSecret
+    def __init__(self, client_id="", client_secret=""):
+        """Initialise a Wessex Water object."""
+        # No auth required for this API so no need to pass in client_id and client_secret
         print("\033[36m" + "Initialising Wessex Water object..." + "\033[0m")
         self._name = "WessexWater"
-        super().__init__(clientID, clientSecret)
+        super().__init__(client_id, client_secret)
         self._d8_file_path = self._fetch_d8_file(
             url=self.D8_FILE_URL,
             known_hash=self.D8_FILE_HASH,
@@ -890,10 +882,8 @@ class WessexWater(WaterCompany):
         self._alerts_table = f"{self._name}_alerts.csv"
         self._alerts_table_update_list = f"{self._name}_alerts_update_list.dat"
 
-    def _fetch_monitor_history(self, monitor: Monitor) -> List[Event]:
-        """
-        Not available for Wessex Water API.
-        """
+    def _fetch_monitor_history(self, monitor: Monitor) -> list[Event]:
+        """Not available for Wessex Water API."""
         print(
             "\033[36m"
             + "This function is not available for the Wessex Water API."
@@ -903,9 +893,7 @@ class WessexWater(WaterCompany):
         return
 
     def set_all_histories(self) -> None:
-        """
-        Not available for Wessex Water API.
-        """
+        """Not available for Wessex Water API."""
         print(
             "\033[36m"
             + "This function is not available for the Wessex Water API."
@@ -916,7 +904,9 @@ class WessexWater(WaterCompany):
 
     def _row_to_monitor(self, row: pd.DataFrame) -> Monitor:
         """
-        Convert a row of the Wessex Water active API response to a Monitor object. See `_fetch_current_status_df`
+        Convert a row of the Wessex Water active API response to a Monitor object.
+
+        See `_fetch_current_status_df`
         """
         current_time = (
             self._timestamp
@@ -954,7 +944,9 @@ class WessexWater(WaterCompany):
 
     def _row_to_event(self, row: pd.DataFrame, monitor: Monitor) -> Event:
         """
-        Convert a row of the Wessex Water active API response to an Event object. See `_fetch_current_status_df`
+        Convert a row of the Wessex Water active API response to an Event object.
+
+        See `_fetch_current_status_df`
         """
         if row["Status"] == 1:
             event = Discharge(
@@ -993,7 +985,8 @@ class WessexWater(WaterCompany):
 
 class SouthWestWater(WaterCompany):
     """
-    Creates an object to interact with the South West Water EDM API.
+    Create an object to interact with the South West Water EDM API.
+
     There is no auth on this endpoint required currently.
     There is only a current status endpoint, no historical endpoint available.
     """
@@ -1006,11 +999,12 @@ class SouthWestWater(WaterCompany):
     D8_FILE_URL = "https://zenodo.org/records/14238014/files/southwest_d8.nc?download=1"
     D8_FILE_HASH = "md5:1df4df2f3d7afac19c1d8f9dcf794882"
 
-    def __init__(self, clientID="", clientSecret=""):
-        # No auth required for this API so no need to pass in clientID and clientSecret
+    def __init__(self, client_id="", client_secret=""):
+        """Initialise a South West Water object."""
+        # No auth required for this API so no need to pass in client_id and client_secret
         print("\033[36m" + "Initialising South West Water object..." + "\033[0m")
         self._name = "SouthWest Water"
-        super().__init__(clientID, clientSecret)
+        super().__init__(client_id, client_secret)
         self._d8_file_path = self._fetch_d8_file(
             url=self.D8_FILE_URL,
             known_hash=self.D8_FILE_HASH,
@@ -1018,10 +1012,8 @@ class SouthWestWater(WaterCompany):
         self._alerts_table = f"{self._name}_alerts.csv"
         self._alerts_table_update_list = f"{self._name}_alerts_update_list.dat"
 
-    def _fetch_monitor_history(self, monitor: Monitor) -> List[Event]:
-        """
-        Not available for South West Water API.
-        """
+    def _fetch_monitor_history(self, monitor: Monitor) -> list[Event]:
+        """Not available for South West Water API."""
         print(
             "\033[36m"
             + "This function is not available for the South West Water API."
@@ -1031,9 +1023,7 @@ class SouthWestWater(WaterCompany):
         return
 
     def set_all_histories(self) -> None:
-        """
-        Not available for South West Water API.
-        """
+        """Not available for South West Water API."""
         print(
             "\033[36m"
             + "This function is not available for the South West Water API."
@@ -1044,7 +1034,9 @@ class SouthWestWater(WaterCompany):
 
     def _row_to_monitor(self, row: pd.DataFrame) -> Monitor:
         """
-        Convert a row of the South West Water active API response to a Monitor object. See `_fetch_current_status_df`
+        Convert a row of the South West Water active API response to a Monitor object.
+
+        See `_fetch_current_status_df`
         """
         current_time = (
             self._timestamp
@@ -1089,7 +1081,9 @@ class SouthWestWater(WaterCompany):
 
     def _row_to_event(self, row: pd.DataFrame, monitor: Monitor) -> Event:
         """
-        Convert a row of the South West Water active API response to an Event object. See `_fetch_current_status_df`
+        Convert a row of the South West Water active API response to an Event object.
+
+        See `_fetch_current_status_df`
         """
         if row["status"] == 1:
             event = Discharge(
@@ -1119,7 +1113,8 @@ class SouthWestWater(WaterCompany):
 
 class UnitedUtilities(WaterCompany):
     """
-    Creates an object to interact with the United Utilities EDM API.
+    Create an object to interact with the United Utilities EDM API.
+
     There is no auth on this endpoint required currently.
     There is only a current status endpoint, no historical endpoint available.
     """
@@ -1136,11 +1131,12 @@ class UnitedUtilities(WaterCompany):
     )
     D8_FILE_HASH = "md5:ebd906bc2ebb3239cb8ae40dca71f9a1"
 
-    def __init__(self, clientID="", clientSecret=""):
-        # No auth required for this API so no need to pass in clientID and clientSecret
+    def __init__(self, client_id="", client_secret=""):
+        """Initialise a United Utilities object."""
+        # No auth required for this API so no need to pass in client_id and client_secret
         print("\033[36m" + "Initialising United Utilities object..." + "\033[0m")
         self._name = "United Utilities"
-        super().__init__(clientID, clientSecret)
+        super().__init__(client_id, client_secret)
         self._d8_file_path = self._fetch_d8_file(
             url=self.D8_FILE_URL,
             known_hash=self.D8_FILE_HASH,
@@ -1148,10 +1144,8 @@ class UnitedUtilities(WaterCompany):
         self._alerts_table = f"{self._name}_alerts.csv"
         self._alerts_table_update_list = f"{self._name}_alerts_update_list.dat"
 
-    def _fetch_monitor_history(self, monitor: Monitor) -> List[Event]:
-        """
-        Not available for United Utilities API.
-        """
+    def _fetch_monitor_history(self, monitor: Monitor) -> list[Event]:
+        """Not available for United Utilities API."""
         print(
             "\033[36m"
             + "This function is not available for the United Utilities API."
@@ -1161,9 +1155,7 @@ class UnitedUtilities(WaterCompany):
         return
 
     def set_all_histories(self) -> None:
-        """
-        Not available for United Utilities API.
-        """
+        """Not available for United Utilities API."""
         print(
             "\033[36m"
             + "This function is not available for the United Utilities API."
@@ -1174,7 +1166,9 @@ class UnitedUtilities(WaterCompany):
 
     def _row_to_monitor(self, row: pd.DataFrame) -> Monitor:
         """
-        Convert a row of the United Utilities active API response to a Monitor object. See `_fetch_current_status_df`
+        Convert a row of the United Utilities active API response to a Monitor object.
+
+        See `_fetch_current_status_df`
         """
         current_time = (
             self._timestamp
@@ -1214,7 +1208,9 @@ class UnitedUtilities(WaterCompany):
 
     def _row_to_event(self, row: pd.DataFrame, monitor: Monitor) -> Event:
         """
-        Convert a row of the United Utilities active API response to an Event object. See `_fetch_current_status_df`
+        Convert a row of the United Utilities active API response to an Event object.
+
+        See `_fetch_current_status_df`
         """
         # If event_end is NaT update event_end to be None. This is normally because the monitor is yet
         # to have a discharge event. So, cannot sensibly record the start time of the no discharge event.
@@ -1256,7 +1252,8 @@ class UnitedUtilities(WaterCompany):
 
 class YorkshireWater(WaterCompany):
     """
-    Creates an object to interact with the Yorkshire Water EDM API.
+    Create an object to interact with the Yorkshire Water EDM API.
+
     There is no auth on this endpoint required currently.
     There is only a current status endpoint, no historical endpoint available.
     """
@@ -1271,11 +1268,12 @@ class YorkshireWater(WaterCompany):
     D8_FILE_URL = "https://zenodo.org/records/14238014/files/yorkshire_d8.nc?download=1"
     D8_FILE_HASH = "md5:c7acd6c730c4e7a38e9f81eb84960c66"
 
-    def __init__(self, clientID="", clientSecret=""):
-        # No auth required for this API so no need to pass in clientID and clientSecret
+    def __init__(self, client_id="", client_secret=""):
+        """Initialise a Yorkshire Water object."""
+        # No auth required for this API so no need to pass in client_id and client_secret
         print("\033[36m" + "Initialising Yorkshire Water object..." + "\033[0m")
         self._name = "Yorkshire Water"
-        super().__init__(clientID, clientSecret)
+        super().__init__(client_id, client_secret)
         self._d8_file_path = self._fetch_d8_file(
             url=self.D8_FILE_URL,
             known_hash=self.D8_FILE_HASH,
@@ -1283,10 +1281,8 @@ class YorkshireWater(WaterCompany):
         self._alerts_table = f"{self._name}_alerts.csv"
         self._alerts_table_update_list = f"{self._name}_alerts_update_list.dat"
 
-    def _fetch_monitor_history(self, monitor: Monitor) -> List[Event]:
-        """
-        Not available for Yorkshire Water API.
-        """
+    def _fetch_monitor_history(self, monitor: Monitor) -> list[Event]:
+        """Not available for Yorkshire Water API."""
         print(
             "\033[36m"
             + "This function is not available for the Yorkshire Water API."
@@ -1296,9 +1292,7 @@ class YorkshireWater(WaterCompany):
         return
 
     def set_all_histories(self) -> None:
-        """
-        Not available for Yorkshire Water API.
-        """
+        """Not available for Yorkshire Water API."""
         print(
             "\033[36m"
             + "This function is not available for the Yorkshire Water API."
@@ -1309,7 +1303,9 @@ class YorkshireWater(WaterCompany):
 
     def _row_to_monitor(self, row: pd.DataFrame) -> Monitor:
         """
-        Convert a row of the Yorkshire Water active API response to a Monitor object. See `_fetch_current_status_df`
+        Convert a row of the Yorkshire Water active API response to a Monitor object.
+
+        See `_fetch_current_status_df`
         """
         current_time = (
             self._timestamp
@@ -1351,7 +1347,9 @@ class YorkshireWater(WaterCompany):
 
     def _row_to_event(self, row: pd.DataFrame, monitor: Monitor) -> Event:
         """
-        Convert a row of the Yorkshire Water active API response to an Event object. See `_fetch_current_status_df`
+        Convert a row of the Yorkshire Water active API response to an Event object.
+
+        See `_fetch_current_status_df`
         """
         # Thank the heavens, Yorkshire Water API is very clear about the status of the monitor and sensibly uses the
         # StatusStart field... so we can use this to determine the start time of the event. Phew!
@@ -1383,7 +1381,8 @@ class YorkshireWater(WaterCompany):
 
 class NorthumbrianWater(WaterCompany):
     """
-    Creates an object to interact with the Northumbrian Water EDM API.
+    Create an object to interact with the Northumbrian Water EDM API.
+
     There is no auth on this endpoint required currently.
     There is only a current status endpoint, no historical endpoint available.
     """
@@ -1400,11 +1399,12 @@ class NorthumbrianWater(WaterCompany):
     )
     D8_FILE_HASH = "md5:800c8bdb731615efbf4be95039e6056b"
 
-    def __init__(self, clientID="", clientSecret=""):
-        # No auth required for this API so no need to pass in clientID and clientSecret
+    def __init__(self, client_id="", client_secret=""):
+        """Initialise a Northumbrian Water object."""
+        # No auth required for this API so no need to pass in client_id and client_secret
         print("\033[36m" + "Initialising Northumbrian Water object..." + "\033[0m")
         self._name = "Northumbrian Water"
-        super().__init__(clientID, clientSecret)
+        super().__init__(client_id, client_secret)
         self._d8_file_path = self._fetch_d8_file(
             url=self.D8_FILE_URL,
             known_hash=self.D8_FILE_HASH,
@@ -1412,10 +1412,8 @@ class NorthumbrianWater(WaterCompany):
         self._alerts_table = f"{self._name}_alerts.csv"
         self._alerts_table_update_list = f"{self._name}_alerts_update_list.dat"
 
-    def _fetch_monitor_history(self, monitor: Monitor) -> List[Event]:
-        """
-        Not available for Northumbrian Water API.
-        """
+    def _fetch_monitor_history(self, monitor: Monitor) -> list[Event]:
+        """Not available for Northumbrian Water API."""
         print(
             "\033[36m"
             + "This function is not available for the Northumbrian Water API."
@@ -1425,9 +1423,7 @@ class NorthumbrianWater(WaterCompany):
         return
 
     def set_all_histories(self) -> None:
-        """
-        Not available for Northumbrian Water API.
-        """
+        """Not available for Northumbrian Water API."""
         print(
             "\033[36m"
             + "This function is not available for the Northumbrian Water API."
@@ -1438,7 +1434,9 @@ class NorthumbrianWater(WaterCompany):
 
     def _row_to_monitor(self, row: pd.DataFrame) -> Monitor:
         """
-        Convert a row of the Northumbrian Water active API response to a Monitor object. See `_fetch_current_status_df`
+        Convert a row of the Northumbrian Water active API response to a Monitor object.
+
+        See `_fetch_current_status_df`
         """
         current_time = (
             self._timestamp
@@ -1478,7 +1476,9 @@ class NorthumbrianWater(WaterCompany):
 
     def _row_to_event(self, row: pd.DataFrame, monitor: Monitor) -> Event:
         """
-        Convert a row of the Northumbrian Water active API response to an Event object. See `_fetch_current_status_df`
+        Convert a row of the Northumbrian Water active API response to an Event object.
+
+        See `_fetch_current_status_df`
         """
         # Northumbrian Water API is *in general* clear about the status of the monitor and sensibly uses the
         # StatusStart field... but LatestEventEnd does not always coincide with StatusChange for not-discharging monitors.
@@ -1511,7 +1511,8 @@ class NorthumbrianWater(WaterCompany):
 
 class SevernTrentWater(WaterCompany):
     """
-    Creates an object to interact with the SevernTrent Water EDM API.
+    Create an object to interact with the SevernTrent Water EDM API.
+
     There is no auth on this endpoint required currently.
     There is only a current status endpoint, no historical endpoint available.
     """
@@ -1528,11 +1529,12 @@ class SevernTrentWater(WaterCompany):
     )
     D8_FILE_HASH = "md5:6259a6b1b411a972b68067c1092bd0bb"
 
-    def __init__(self, clientID="", clientSecret=""):
-        # No auth required for this API so no need to pass in clientID and clientSecret
+    def __init__(self, client_id="", client_secret=""):
+        """Initialise a Severn Trent Water object."""
+        # No auth required for this API so no need to pass in client_id and client_secret
         print("\033[36m" + "Initialising SevernTrent Water object..." + "\033[0m")
         self._name = "SevernTrent Water"
-        super().__init__(clientID, clientSecret)
+        super().__init__(client_id, client_secret)
         self._d8_file_path = self._fetch_d8_file(
             url=self.D8_FILE_URL,
             known_hash=self.D8_FILE_HASH,
@@ -1540,10 +1542,8 @@ class SevernTrentWater(WaterCompany):
         self._alerts_table = f"{self._name}_alerts.csv"
         self._alerts_table_update_list = f"{self._name}_alerts_update_list.dat"
 
-    def _fetch_monitor_history(self, monitor: Monitor) -> List[Event]:
-        """
-        Not available for SevernTrent Water API.
-        """
+    def _fetch_monitor_history(self, monitor: Monitor) -> list[Event]:
+        """Not available for SevernTrent Water API."""
         print(
             "\033[36m"
             + "This function is not available for the SevernTrent Water API."
@@ -1553,9 +1553,7 @@ class SevernTrentWater(WaterCompany):
         return
 
     def set_all_histories(self) -> None:
-        """
-        Not available for SevernTrent Water API.
-        """
+        """Not available for SevernTrent Water API."""
         print(
             "\033[36m"
             + "This function is not available for the SevernTrent Water API."
@@ -1566,7 +1564,9 @@ class SevernTrentWater(WaterCompany):
 
     def _row_to_monitor(self, row: pd.DataFrame) -> Monitor:
         """
-        Convert a row of the SevernTrent Water active API response to a Monitor object. See `_fetch_current_status_df`
+        Convert a row of the SevernTrent Water active API response to a Monitor object.
+
+        See `_fetch_current_status_df`
         """
         current_time = (
             self._timestamp
@@ -1606,7 +1606,9 @@ class SevernTrentWater(WaterCompany):
 
     def _row_to_event(self, row: pd.DataFrame, monitor: Monitor) -> Event:
         """
-        Convert a row of the SevernTrent Water active API response to an Event object. See `_fetch_current_status_df`
+        Convert a row of the SevernTrent Water active API response to an Event object.
+
+        See `_fetch_current_status_df`
         """
         # SevernTrent provide a good use of the "StatusStart" field to determine the start time of the event. Hooray!
         # This makes our life easier (but does mean that we should check that it matches up with LatestEventEnd and LatestEventStart!_
@@ -1637,6 +1639,18 @@ class SevernTrentWater(WaterCompany):
 
 
 def latlong_to_osgb(lat, lon):
+    """
+    Convert latitude and longitude to OSGB36 coordinates.
+
+    Args:
+        lat: Latitude in WGS84.
+        lon: Longitude in WGS84.
+
+    Returns:
+        x: OSGB36 easting.
+        y: OSGB36 northing.
+
+    """
     # Define the WGS84 spatial reference system
     wgs84 = osr.SpatialReference()
     wgs84.ImportFromEPSG(4326)  # WGS84
@@ -1654,16 +1668,17 @@ def latlong_to_osgb(lat, lon):
 
 
 def _process_monitor_history_pl(
-    args: Tuple[
+    args: tuple[
         str,
         pd.DataFrame,
-        Dict[str, Monitor],
-        Callable[[pd.DataFrame, Monitor], List[Event]],
+        dict[str, Monitor],
+        Callable[[pd.DataFrame, Monitor], list[Event]],
     ],
-) -> Tuple[str, List[Event]]:
+) -> tuple[str, list[Event]]:
     """
-    Process a single monitor's history in parallel. This function is used in
-    the `set_all_histories_parallel` method of the `ThamesWater` class.
+    Process a single monitor's history in parallel.
+
+    This function is used in the `set_all_histories_parallel` method of the `ThamesWater` class.
 
     Args:
         args: A tuple containing:
@@ -1671,6 +1686,7 @@ def _process_monitor_history_pl(
             - df: The DataFrame containing historical data.
             - active_monitors: A dictionary of active monitors.
             - alerts_df_to_events_list: A function to convert DataFrame to events list.
+
     """
     name, df, active_monitors, alerts_df_to_events_list = args
     subset = df[df["LocationName"] == name]

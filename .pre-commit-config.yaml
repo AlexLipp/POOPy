@@ -3,3 +3,9 @@ repos:
     rev: 25.1.0 # Replace with the latest version!
     hooks:
       - id: black
+
+  - repo: https://github.com/charliermarsh/ruff-pre-commit
+    rev: v0.11.4  # Use the latest Ruff version
+    hooks:
+      - id: ruff
+        args: ["--fix"] 
