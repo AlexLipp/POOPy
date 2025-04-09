@@ -1,4 +1,5 @@
-![Code style: black](https://img.shields.io/badge/code%20style-black-000000.svg)
+[![Black](https://img.shields.io/badge/code%20style-black-000000?logo=python&logoColor=white)](https://github.com/psf/black)
+[![Ruff](https://img.shields.io/badge/lint-Ruff%20(E%2C%20F%2C%20I%2C%20D%2C%20N)-blueviolet?logo=python&logoColor=white)](https://github.com/astral-sh/ruff)
 [![pre-commit](https://img.shields.io/badge/pre--commit-enabled-brightgreen?logo=pre-commit&logoColor=white)](https://pre-commit.com/)
 ![License: GPL v3](https://img.shields.io/badge/License-GPLv3-blue.svg)
 
