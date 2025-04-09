@@ -43,6 +43,7 @@ class Monitor:
         total_discharge_since_start_of_year: Returns total discharge since start of year
         event_at: Returns the event that was occurring at given time (or None).
         recent_discharge_at: Was there a discharge in last 48 hours of a given time.
+        is_on_null_island: Check if the monitor is on Null Island.
 
     """
 
@@ -156,12 +157,9 @@ class Monitor:
         """Return whether the monitor has discharged in the last 48 hours."""
         if self._discharge_in_last_48h is None:
             warnings.warn(
-                "\033[91m"(
-                    f"!ADVISORY! Information on discharges in last 48hrs could not "
-                    f"be set for '{self.site_name}'. `.discharge_in_last_48h` "
-                    f"attribute returns None."
-                )
-                + "\033[0m"
+                f"\033[91m!ADVISORY! Information on discharges in last 48hrs could not "
+                f"be set for '{self.site_name}'. `.discharge_in_last_48h` "
+                f"attribute returns None.\033[0m"
             )
         return self._discharge_in_last_48h
 
@@ -449,6 +447,22 @@ class Monitor:
                         )
 
         return online, active, recent
+
+    def is_on_null_island(self) -> bool:
+        """
+        Check if the monitor is on Null Island (0, 0 lat long).
+
+        Returns:
+            bool: True if the monitor is on Null Island, False otherwise.
+
+        """
+        # Check if the monitor's coordinates are close to the Null Island coordinates (in OSGB)
+        null_island_x, null_island_y = 622575.7031043093, -5527063.8148287395
+
+        return (
+            abs(self.x_coord - null_island_x) < 1e-3
+            and abs(self.y_coord - null_island_y) < 1e-3
+        )
 
 
 class Event(ABC):
@@ -800,7 +814,19 @@ class WaterCompany(ABC):
             monitor = self._row_to_monitor(row=row)
             event = self._row_to_event(row=row, monitor=monitor)
             monitor.current_event = event
-            monitors[monitor.site_name] = monitor
+
+            # Check that the monitor location is sensible:
+            if monitor.is_on_null_island():
+                warnings.warn(
+                    f"\033[91m!ADVISORY! Monitor '{monitor.site_name}' is located on Null Island!"
+                    + "\nSkipping."
+                    + "\nReport this issue to the Water Company!"
+                    + "\033[0m"
+                )
+                # Continue to the next monitor
+                continue
+            else:
+                monitors[monitor.site_name] = monitor
         return monitors
 
     def build_all_histories_locally(self) -> None:
@@ -1027,6 +1053,7 @@ class WaterCompany(ABC):
         # Calculate the downstream impact
         if include_recent_discharges:
             sources = self.recently_discharging_monitors
+            print(f"Type of sources: {type(sources)}")
         else:
             sources = self.discharging_monitors
         downstream_impact = self._calculate_downstream_impact(source_monitors=sources)
