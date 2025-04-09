@@ -12,7 +12,7 @@ jobs:
   test:
     runs-on: ubuntu-latest
     container:
-      image: ghcr.io/osgeo/gdal:ubuntu-full-3.10.3 # Use the GDAL container image
+      image: ghcr.io/andrii-rieznik/python-gdal
 
     steps:
     - name: Checkout code
