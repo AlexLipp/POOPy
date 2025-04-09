@@ -1,3 +1,7 @@
+![Code style: black](https://img.shields.io/badge/code%20style-black-000000.svg)
+[![pre-commit](https://img.shields.io/badge/pre--commit-enabled-brightgreen?logo=pre-commit&logoColor=white)](https://pre-commit.com/)
+![License: GPL v3](https://img.shields.io/badge/License-GPLv3-blue.svg)
+
 # POOPy
 
 **POOPy** = **P**ollution discharge monitoring with **O**bject **O**riented **Py**thon
