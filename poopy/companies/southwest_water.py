@@ -69,7 +69,7 @@ class SouthWestWater(WaterCompany):
 
         x, y = latlong_to_osgb(row["latitude"], row["longitude"])
 
-        # South West Water does not always provide a site name or even ID! Losers!
+        # South West Water does not always provide a site name or even an ID, which can make identification challenging.
         if pd.isna(row["ID"]):
             name = "Unknown"
         else:
