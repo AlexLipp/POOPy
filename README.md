@@ -44,20 +44,24 @@ Where historical information on CSO discharges are available (currently only pro
 
 ## Installation
 
-Install this package by running the following command (replacing `[LOCAL DIRECTORY]` with the directory you wish to install the package into).
-
-
-```bash
-git clone https://github.com/AlexLipp/POOPy.git [LOCAL DIRECTORY]
-pip install .
-```
-
 ### Dependencies
 
 The package requires standard scientific Python packages (e.g. `numpy`, `pandas`, `matplotlib`) as well as the following packages:
 
 - [GDAL](https://gdal.org/download.html) - Required to manipulate geospatial datasets.
 - [pytest](https://docs.pytest.org/en/stable/) - For running the test suite [_optional_, see [Testing](#testing)].
+
+GDAL installation can frequently prove challenging. As a result, we advise installing GDAL _first_ seperately prior to installing `POOPy` (see below). Generally, we have encountered fewer problems with GDAL if it is installed via [conda](https://anaconda.org/conda-forge/gdal) (e.g., `conda install conda-forge::gdal`) than via `pip`.  
+
+Install this package by running the following command (replacing `[LOCAL DIRECTORY]` with the directory you wish to install the package into).
+
+## Install
+
+```bash
+git clone https://github.com/AlexLipp/POOPy.git [LOCAL DIRECTORY]
+pip install .
+```
+
 ### API Keys
 
 To access the data for the following water companies, you will need to obtain API keys from the relevant water company by registering with their developer portal: 
