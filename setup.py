@@ -14,12 +14,12 @@ extensions = [
 
 setup(
     name="poopy",
-    version="0.4.1",
+    version="0.4.2",
     ext_modules=cythonize(extensions),
     include_dirs=[numpy.get_include()],
     packages=find_packages(),
     author="Alex Lipp",
-    author_email="alexander.lipp@merton.ox.ac.uk",
+    author_email="a.lipp@ucl.ac.uk",
     description="An Object Oriented Python package for working with English Water Companies Event Duration Monitoring live data.",
     install_requires=[
         "Cython",
