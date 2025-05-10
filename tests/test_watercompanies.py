@@ -29,6 +29,7 @@ from poopy.companies import (
 )
 from poopy.poopy import Event, Monitor, WaterCompany
 
+
 def check_current_event_init(current: Event, monitor: Monitor):
     """
     Test the initialization of the (current) event attribute w.r.t the Monitor object it belongs to.

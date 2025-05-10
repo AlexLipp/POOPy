@@ -32,7 +32,7 @@ class ThamesWater(WaterCompany):
     D8_FILE_URL = "https://zenodo.org/records/14238014/files/thames_d8.nc?download=1"
     D8_FILE_HASH = "md5:1047a14906237cd436fd483e87c1647d"
 
-    def __init__(self, client_id = "", client_secret = ""):
+    def __init__(self, client_id="", client_secret=""):
         """Initialise a Thames Water object."""
         print("\033[36m" + "Initialising Thames Water object..." + "\033[0m")
         self._name = "ThamesWater"
@@ -144,7 +144,7 @@ class ThamesWater(WaterCompany):
         params = {
             "limit": self.API_LIMIT,
             "offset": 0,
-            "locationName": monitor.site_name
+            "locationName": monitor.site_name,
         }
         df = self._handle_current_api_response(url=url, params=params, verbose=verbose)
         # Note, we use handle_current_api_response here because we want to try and fetch all records not just those up to a certain date. This
@@ -157,22 +157,22 @@ class ThamesWater(WaterCompany):
         """Transform API response so Thames v2 data remains compatible with WaterCompany class."""
         if df.empty:
             return df
-            
+
         # Map of camelCase field names to PascalCase field names
         field_mapping = {
-            'locationName': 'LocationName',
-            'permitNumber': 'PermitNumber',
-            'locationGridRef': 'LocationGridRef',
-            'x': 'X',
-            'y': 'Y',
-            'receivingWaterCourse': 'ReceivingWaterCourse',
-            'alertStatus': 'AlertStatus',
-            'statusChanged': 'StatusChange',
-            'alertPast48Hours': 'AlertPast48Hours',
-            'datetime': 'DateTime',
-            'alertType': 'AlertType'
+            "locationName": "LocationName",
+            "permitNumber": "PermitNumber",
+            "locationGridRef": "LocationGridRef",
+            "x": "X",
+            "y": "Y",
+            "receivingWaterCourse": "ReceivingWaterCourse",
+            "alertStatus": "AlertStatus",
+            "statusChanged": "StatusChange",
+            "alertPast48Hours": "AlertPast48Hours",
+            "datetime": "DateTime",
+            "alertType": "AlertType",
         }
-        
+
         # Rename columns that exist in the DataFrame
         existing_columns = set(df.columns) & set(field_mapping.keys())
         rename_dict = {col: field_mapping[col] for col in existing_columns}
@@ -206,7 +206,9 @@ class ThamesWater(WaterCompany):
                     break
                 else:
                     df_temp = pd.json_normalize(response["items"])
-                    df_temp = self._transform_api_response(df_temp) # Transform from v2 format for compatibility
+                    df_temp = self._transform_api_response(
+                        df_temp
+                    )  # Transform from v2 format for compatibility
             else:
                 raise Exception(
                     f"\tRequest failed with status code {r.status_code}, and error message: {r.json()}"
@@ -279,7 +281,9 @@ class ThamesWater(WaterCompany):
                     )
                 else:
                     df_temp = pd.json_normalize(response["items"])
-                    df_temp = self._transform_api_response(df_temp) # Transform from v2 format for compatibility
+                    df_temp = self._transform_api_response(
+                        df_temp
+                    )  # Transform from v2 format for compatibility
                     # Extract the datetime of the last record fetched and cast it to a datetime object
                     last_record_datetime = pd.to_datetime(df_temp["DateTime"].iloc[-1])
                     if last_record_datetime < self.HISTORY_VALID_UNTIL:
