@@ -14,9 +14,9 @@ from poopy.poopy import Discharge, Event, Monitor, NoDischarge, Offline, WaterCo
 class ThamesWater(WaterCompany):
     """A subclass of `WaterCompany` that represents the EDM monitoring network for Thames Water."""
 
-    API_ROOT = "https://prod-tw-opendata-app.uk-e1.cloudhub.io"
-    CURRENT_API_RESOURCE = "/data/STE/v1/DischargeCurrentStatus"
-    HISTORICAL_API_RESOURCE = "/data/STE/v1/DischargeAlerts"
+    API_ROOT = "https://api.thameswater.co.uk"
+    CURRENT_API_RESOURCE = "/opendata/v2/discharge/status"
+    HISTORICAL_API_RESOURCE = "/opendata/v2/discharge/alerts"
     API_LIMIT = 1000  # Max num of outputs that can be requested from the API at once
 
     # Set history valid until to be half past midnight on the 1st April 2022
@@ -32,7 +32,7 @@ class ThamesWater(WaterCompany):
     D8_FILE_URL = "https://zenodo.org/records/14238014/files/thames_d8.nc?download=1"
     D8_FILE_HASH = "md5:1047a14906237cd436fd483e87c1647d"
 
-    def __init__(self, client_id: str, client_secret: str):
+    def __init__(self, client_id="", client_secret=""):
         """Initialise a Thames Water object."""
         print("\033[36m" + "Initialising Thames Water object..." + "\033[0m")
         self._name = "ThamesWater"
@@ -144,9 +144,7 @@ class ThamesWater(WaterCompany):
         params = {
             "limit": self.API_LIMIT,
             "offset": 0,
-            "col_1": "LocationName",
-            "operand_1": "eq",
-            "value_1": monitor.site_name,
+            "locationName": monitor.site_name,
         }
         df = self._handle_current_api_response(url=url, params=params, verbose=verbose)
         # Note, we use handle_current_api_response here because we want to try and fetch all records not just those up to a certain date. This
@@ -154,6 +152,31 @@ class ThamesWater(WaterCompany):
         # not ideal because it means that if the API erroneously returns an empty dataframe in place of an error message, then the function will
         # return an empty dataframe. This is the fault of the API, not this code but it is something to be aware of, and needs to be fixed.
         return df
+
+    def _transform_api_response(self, df: pd.DataFrame) -> pd.DataFrame:
+        """Transform API response so Thames v2 data remains compatible with WaterCompany class."""
+        if df.empty:
+            return df
+
+        # Map of camelCase field names to PascalCase field names
+        field_mapping = {
+            "locationName": "LocationName",
+            "permitNumber": "PermitNumber",
+            "locationGridRef": "LocationGridRef",
+            "x": "X",
+            "y": "Y",
+            "receivingWaterCourse": "ReceivingWaterCourse",
+            "alertStatus": "AlertStatus",
+            "statusChanged": "StatusChange",
+            "alertPast48Hours": "AlertPast48Hours",
+            "datetime": "DateTime",
+            "alertType": "AlertType",
+        }
+
+        # Rename columns that exist in the DataFrame
+        existing_columns = set(df.columns) & set(field_mapping.keys())
+        rename_dict = {col: field_mapping[col] for col in existing_columns}
+        return df.rename(columns=rename_dict)
 
     def _handle_current_api_response(
         self, url: str, params: str, verbose: bool = False
@@ -170,10 +193,6 @@ class ThamesWater(WaterCompany):
         while True:
             r = requests.get(
                 url,
-                headers={
-                    "client_id": self.client_id,
-                    "client_secret": self.client_secret,
-                },
                 params=params,
             )
 
@@ -187,6 +206,9 @@ class ThamesWater(WaterCompany):
                     break
                 else:
                     df_temp = pd.json_normalize(response["items"])
+                    df_temp = self._transform_api_response(
+                        df_temp
+                    )  # Transform from v2 format for compatibility
             else:
                 raise Exception(
                     f"\tRequest failed with status code {r.status_code}, and error message: {r.json()}"
@@ -194,7 +216,6 @@ class ThamesWater(WaterCompany):
             df = pd.concat([df, df_temp])
             params["offset"] += params["limit"]  # Increment offset for the next request
         df.reset_index(drop=True, inplace=True)
-
         # Print the full dataframe to the console if verbose is set to True
         if verbose:
             print("\033[36m" + "\tPrinting full API response..." + "\033[0m")
@@ -230,10 +251,6 @@ class ThamesWater(WaterCompany):
         while True:
             r = requests.get(
                 url,
-                headers={
-                    "client_id": self.client_id,
-                    "client_secret": self.client_secret,
-                },
                 params=params,
             )
             print("\033[36m" + "\tRequesting from " + r.url + "\033[0m")
@@ -264,6 +281,9 @@ class ThamesWater(WaterCompany):
                     )
                 else:
                     df_temp = pd.json_normalize(response["items"])
+                    df_temp = self._transform_api_response(
+                        df_temp
+                    )  # Transform from v2 format for compatibility
                     # Extract the datetime of the last record fetched and cast it to a datetime object
                     last_record_datetime = pd.to_datetime(df_temp["DateTime"].iloc[-1])
                     if last_record_datetime < self.HISTORY_VALID_UNTIL:
