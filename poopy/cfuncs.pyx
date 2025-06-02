@@ -25,7 +25,7 @@ def d8_to_receivers(np.ndarray[long, ndim=2] arr) -> long[:] :
     """
     cdef int nrows = arr.shape[0]
     cdef int ncols = arr.shape[1]
-    cdef long[:] receivers = np.empty(nrows * ncols, dtype=long)
+    cdef long[:] receivers = np.empty(nrows * ncols, dtype=np.int64)
     cdef int i, j
     cdef int cell
     for i in range(nrows):
