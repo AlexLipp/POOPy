@@ -177,12 +177,21 @@ class WelshWater(WaterCompany):
                 ongoing=True,
                 start_time=pd.to_datetime(row["stop_date_time_discharge"]),
             )
-        elif row["status"] == "Under Maintenance":
+        # The below has been commented out as it is not currently used in the API response and appears to have been replaced by "Under Investigation"
+        # elif row["status"] == "Under Maintenance":
+        #     event = Offline(
+        #         monitor=monitor,
+        #         ongoing=True,
+        #         start_time=None,  # !!! The api doesn't provide a status change date for this
+        #     )
+        # Check if the status is "Under Investigation"
+        elif row["status"] == "Under Investigation":
             event = Offline(
                 monitor=monitor,
                 ongoing=True,
                 start_time=None,  # !!! The api doesn't provide a status change date for this
             )
+
         else:
             raise Exception(
                 "Unknown status type "
