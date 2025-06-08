@@ -4,7 +4,7 @@ from datetime import timedelta
 
 import pandas as pd
 
-from poopy.poopy import Discharge, Event, Monitor, NoDischarge, WaterCompany
+from poopy.poopy import Discharge, Event, Monitor, NoDischarge, Offline, WaterCompany
 from poopy.utils import latlong_to_osgb
 
 
@@ -81,8 +81,8 @@ class SouthernWater(WaterCompany):
         if row["Status"] == 1:
             last_48h = True
 
-        # if monitor not currently discharging, we check if it has discharged in the last 48 hours
-        elif row["Status"] == 0:
+        # if monitor not currently discharging (or is offline), we check if it has discharged in the last 48 hours
+        elif row["Status"] == 0 or row["Status"] == -1:
             # If last_event_end is within the last 48 hours, set last_48h to be True
             if (
                 last_event_end is not None
@@ -140,6 +140,12 @@ class SouthernWater(WaterCompany):
                 ongoing=True,
                 # Assume the the period of no discharge is from the end of the last event to the current time
                 start_time=last_event_end,
+            )
+        elif row["Status"] == -1:
+            event = Offline(
+                monitor=monitor,
+                ongoing=True,
+                start_time=None,  # Offline events may not have a reliable start time in the Anglian Water API
             )
         else:
             raise Exception(
