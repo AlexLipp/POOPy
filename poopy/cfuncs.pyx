@@ -7,13 +7,13 @@ from libcpp.stack cimport stack
 from libcpp.vector cimport vector
 
 import numpy as np
-cimport numpy as np
+cimport numpy as cnp
 cimport cython
 from libc.stdlib cimport malloc, free
 
 @cython.boundscheck(False)  # Deactivate bounds checking
 @cython.wraparound(False)   # Deactivate negative indexing.
-def d8_to_receivers(np.ndarray[long, ndim=2] arr) -> long[:] :
+def d8_to_receivers(cnp.ndarray[long, ndim=2] arr) -> long[:] :
     """
     Converts a D8 flow direction array to a receiver array.
 
@@ -25,7 +25,7 @@ def d8_to_receivers(np.ndarray[long, ndim=2] arr) -> long[:] :
     """
     cdef int nrows = arr.shape[0]
     cdef int ncols = arr.shape[1]
-    cdef long[:] receivers = np.empty(nrows * ncols, dtype=np.int64)
+    cdef cnp.int64_t[:] receivers = np.empty(nrows * ncols, dtype=np.int64)
     cdef int i, j
     cdef int cell
     for i in range(nrows):
@@ -157,7 +157,7 @@ def add_to_ordered_list(int l, int j, int[:] s, int[:] delta, int[:] donors) -> 
 
 @cython.boundscheck(False)  # Deactivate bounds checking
 @cython.wraparound(False)   # Deactivate negative indexing.
-def build_ordered_list_recursive(long[:] receivers, np.ndarray[long, ndim=1] baselevel_nodes) -> int[:] :
+def build_ordered_list_recursive(long[:] receivers, cnp.ndarray[long, ndim=1] baselevel_nodes) -> int[:] :
     """
     Builds the ordered list of nodes in topological order, given the receiver array.
     Starts at the baselevel nodes and works upstream. This uses recursion 
@@ -185,7 +185,7 @@ def build_ordered_list_recursive(long[:] receivers, np.ndarray[long, ndim=1] bas
 
 @cython.boundscheck(False)  # Deactivate bounds checking
 @cython.wraparound(False)   # Deactivate negative indexing.
-def build_ordered_list_iterative(long[:] receivers, np.ndarray[long, ndim=1] baselevel_nodes) -> int[:] :
+def build_ordered_list_iterative(long[:] receivers, cnp.ndarray[long, ndim=1] baselevel_nodes) -> int[:] :
     """
     Builds the ordered list of nodes in topological order, given the receiver array.
     Starts at the baselevel nodes and works upstream in a wave building a 
@@ -237,7 +237,7 @@ def build_ordered_list_iterative(long[:] receivers, np.ndarray[long, ndim=1] bas
 def accumulate_flow(
     long[:] receivers, 
     int[:] ordered, 
-    np.ndarray[double, ndim=1] weights
+    cnp.ndarray[double, ndim=1] weights
 ):
     """
     Accumulates flow along the stack of nodes in topological order, given the receiver array,
@@ -250,7 +250,7 @@ def accumulate_flow(
         weights: The weights array (i.e., the contribution from each node).
     """
     cdef int n = receivers.shape[0]
-    cdef np.ndarray[double, ndim=1] accum = weights.copy()
+    cdef cnp.ndarray[double, ndim=1] accum = weights.copy()
     cdef int i
     cdef long donor, recvr
 
