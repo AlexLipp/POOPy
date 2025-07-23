@@ -11,44 +11,44 @@ cimport numpy as cnp
 cimport cython
 from libc.stdlib cimport malloc, free
 
-@cython.boundscheck(False)  # Deactivate bounds checking
-@cython.wraparound(False)   # Deactivate negative indexing.
-def d8_to_receivers(cnp.ndarray[long, ndim=2] arr) -> long[:] :
+@cython.boundscheck(False)
+@cython.wraparound(False)
+def d8_to_receivers(cnp.ndarray[cnp.int64_t, ndim=2] arr) -> cnp.int64_t[:]:
     """
     Converts a D8 flow direction array to a receiver array.
 
     Args:
         arr: A D8 flow direction array.
-    
+
     Returns:
         A receiver array.
     """
-    cdef int nrows = arr.shape[0]
-    cdef int ncols = arr.shape[1]
+    cdef Py_ssize_t nrows = arr.shape[0]
+    cdef Py_ssize_t ncols = arr.shape[1]
     cdef cnp.int64_t[:] receivers = np.empty(nrows * ncols, dtype=np.int64)
-    cdef int i, j
-    cdef int cell
+    cdef Py_ssize_t i, j
+    cdef Py_ssize_t cell
+
     for i in range(nrows):
         for j in range(ncols):
             cell = i * ncols + j
-            # Check if boundary cell
             if i == 0 or j == 0 or i == nrows - 1 or j == ncols - 1 or arr[i, j] == 0:
                 receivers[cell] = cell
-            elif arr[i, j] == 1:  # Right
+            elif arr[i, j] == 1:
                 receivers[cell] = i * ncols + j + 1
-            elif arr[i, j] == 2:  # Lower right
+            elif arr[i, j] == 2:
                 receivers[cell] = (i + 1) * ncols + j + 1
-            elif arr[i, j] == 4:  # Bottom
+            elif arr[i, j] == 4:
                 receivers[cell] = (i + 1) * ncols + j
-            elif arr[i, j] == 8:  # Lower left
+            elif arr[i, j] == 8:
                 receivers[cell] = (i + 1) * ncols + j - 1
-            elif arr[i, j] == 16:  # Left
+            elif arr[i, j] == 16:
                 receivers[cell] = i * ncols + j - 1
-            elif arr[i, j] == 32:  # Upper left
+            elif arr[i, j] == 32:
                 receivers[cell] = (i - 1) * ncols + j - 1
-            elif arr[i, j] == 64:  # Top
+            elif arr[i, j] == 64:
                 receivers[cell] = (i - 1) * ncols + j
-            elif arr[i, j] == 128:  # Upper right
+            elif arr[i, j] == 128:
                 receivers[cell] = (i - 1) * ncols + j + 1
             else:
                 raise ValueError(f"Invalid flow direction value: {arr[i, j]}")
@@ -57,7 +57,7 @@ def d8_to_receivers(cnp.ndarray[long, ndim=2] arr) -> long[:] :
 
 @cython.boundscheck(False)  # Deactivate bounds checking
 @cython.wraparound(False)   # Deactivate negative indexing.
-def count_donors(long[:] r) -> int[:] :
+def count_donors(cnp.int64_t[:] r) -> int[:] :
     """
     Counts the number of donors that each cell has.
 
@@ -101,7 +101,7 @@ def ndonors_to_delta(int[:] nd) -> int[:] :
 
 @cython.boundscheck(False)  # Deactivate bounds checking
 @cython.wraparound(False)   # Deactivate negative indexing.
-def make_donor_array(long[:] r, int[:] delta) -> int[:] :
+def make_donor_array(cnp.int64_t[:] r, int[:] delta) -> int[:] :
     """
     Makes the array of donors. This is indexed according to the delta
     array. i.e., the donors to node i are stored in the range delta[i] to delta[i+1].
@@ -157,7 +157,7 @@ def add_to_ordered_list(int l, int j, int[:] s, int[:] delta, int[:] donors) -> 
 
 @cython.boundscheck(False)  # Deactivate bounds checking
 @cython.wraparound(False)   # Deactivate negative indexing.
-def build_ordered_list_recursive(long[:] receivers, cnp.ndarray[long, ndim=1] baselevel_nodes) -> int[:] :
+def build_ordered_list_recursive(cnp.int64_t[:] receivers, cnp.ndarray[cnp.int64_t, ndim=1] baselevel_nodes) -> int[:] :
     """
     Builds the ordered list of nodes in topological order, given the receiver array.
     Starts at the baselevel nodes and works upstream. This uses recursion 
@@ -185,7 +185,7 @@ def build_ordered_list_recursive(long[:] receivers, cnp.ndarray[long, ndim=1] ba
 
 @cython.boundscheck(False)  # Deactivate bounds checking
 @cython.wraparound(False)   # Deactivate negative indexing.
-def build_ordered_list_iterative(long[:] receivers, cnp.ndarray[long, ndim=1] baselevel_nodes) -> int[:] :
+def build_ordered_list_iterative(cnp.int64_t[:] receivers, cnp.ndarray[cnp.int64_t, ndim=1] baselevel_nodes) -> int[:] :
     """
     Builds the ordered list of nodes in topological order, given the receiver array.
     Starts at the baselevel nodes and works upstream in a wave building a 
@@ -235,7 +235,7 @@ def build_ordered_list_iterative(long[:] receivers, cnp.ndarray[long, ndim=1] ba
 @cython.boundscheck(False)  # Deactivate bounds checking
 @cython.wraparound(False)   # Deactivate negative indexing.
 def accumulate_flow(
-    long[:] receivers, 
+    cnp.int64_t[:] receivers, 
     int[:] ordered, 
     cnp.ndarray[double, ndim=1] weights
 ):
@@ -252,7 +252,7 @@ def accumulate_flow(
     cdef int n = receivers.shape[0]
     cdef cnp.ndarray[double, ndim=1] accum = weights.copy()
     cdef int i
-    cdef long donor, recvr
+    cdef cnp.int64_t donor, recvr
 
     # Accumulate flow along the stack from upstream to downstream
     for i in range(n - 1, -1, -1):
@@ -266,7 +266,7 @@ def accumulate_flow(
 @cython.boundscheck(False)  # Deactivate bounds checking
 @cython.wraparound(False)   # Deactivate negative indexing.
 def get_channel_segments(
-    long[:] starting_nodes,
+    cnp.int64_t[:] starting_nodes,
     int[:] delta,
     int[:] donors,
     double[:] field,
@@ -300,7 +300,7 @@ def get_channel_segments(
     cdef vector[int] curr_seg # Temporary vector for storing segments
     cdef stack[int] s  # FIFO Stack of nodes to visit
     cdef int node # Current node
-    cdef long b # A baselevel node 
+    cdef cnp.int64_t b # A baselevel node 
     cdef int n_donors # Number of donors for a node
     cdef int m # Donor node
     cdef int n # Donor index
@@ -441,7 +441,7 @@ def id_segments_to_coords_segments(vector[vector[int]] segments, int ncols, floa
 
 @cython.boundscheck(False)  # Deactivate bounds checking
 @cython.wraparound(False)   # Deactivate negative indexing.    
-def get_profile(long start_node, float dx, float dy, long[:] receivers, long[:] d8):
+def get_profile(cnp.int64_t start_node, float dx, float dy, cnp.int64_t[:] receivers, cnp.int64_t[:] d8):
     """
     Gets the profile of a channel segment, given the start node, the receiver array, and the D8 flow direction array. 
 
@@ -453,7 +453,7 @@ def get_profile(long start_node, float dx, float dy, long[:] receivers, long[:] 
         d8: The D8 flow direction array. 
     """
 
-    cdef vector[long] profile 
+    cdef vector[cnp.int64_t] profile 
     cdef vector[float] distance
     cdef float downstream_distance = 0
     downstream_distance = 0  # distance downstream from the start node

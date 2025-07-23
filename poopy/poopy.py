@@ -1053,7 +1053,6 @@ class WaterCompany(ABC):
         # Calculate the downstream impact
         if include_recent_discharges:
             sources = self.recently_discharging_monitors
-            print(f"Type of sources: {type(sources)}")
         else:
             sources = self.discharging_monitors
         downstream_impact = self._calculate_downstream_impact(source_monitors=sources)
