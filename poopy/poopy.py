@@ -214,6 +214,14 @@ class Monitor:
                         total += event.duration
         return total
 
+    def total_discharge_between(
+        self, start: datetime.datetime, end: datetime.datetime
+    ) -> float:
+        """Return the total discharge in minutes between two datetimes."""
+        since_start = self.total_discharge(since=start)
+        since_end = self.total_discharge(since=end)
+        return since_start - since_end
+
     def total_discharge_last_6_months(self) -> float:
         """Return the total discharge in minutes in the last 6 months (183 days)."""
         return self.total_discharge(
