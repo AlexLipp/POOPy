@@ -29,15 +29,6 @@ from poopy.companies import (
 )
 from poopy.poopy import Event, Monitor, WaterCompany
 
-# Retrieve Thames Water API credentials from environment variables
-TW_CLIENTID = os.getenv("TW_CLIENT_ID")
-TW_CLIENTSECRET = os.getenv("TW_CLIENT_SECRET")
-
-if TW_CLIENTID is None or TW_CLIENTSECRET is None:
-    raise ValueError(
-        "Thames Water API keys are missing from the environment!\n Please set them and try again."
-    )
-
 
 def check_current_event_init(current: Event, monitor: Monitor):
     """
@@ -166,10 +157,10 @@ def check_watercompany(wc: WaterCompany):
 
 def test_thames_water_init():
     """Test the basic initialization of a ThamesWater object."""
-    tw = ThamesWater(TW_CLIENTID, TW_CLIENTSECRET)
+    tw = ThamesWater()
     assert tw.name == "ThamesWater"
-    assert tw.client_id == TW_CLIENTID
-    assert tw.client_secret == TW_CLIENTSECRET
+    assert tw.client_id == ""
+    assert tw.client_secret == ""
 
     # Check that the accumulator is initialized correctly with the correct extent (in OSGB)
     assert tw.accumulator.extent == [319975.0, 620025.0, 79975.0, 280025.0]
