@@ -44,6 +44,26 @@ Where historical information on CSO discharges are available (currently only pro
 
 ## Installation
 
+## Install
+
+POOPy is designed to be installed using the [conda](https://docs.conda.io/en/latest/) package manager. First, download the code-base from this repository to a sensible location on your computer: 
+```bash
+git clone https://github.com/AlexLipp/POOPy.git [LOCAL DIRECTORY]
+```
+Next, we create a conda environment with the required dependencies installed using the provided `.yaml` file. Run the following code from your `base` conda environment. 
+```bash
+conda env create -f environment.yaml
+```
+This creates a conda environment called `poopy` that has all the dependencies installed. Now, activate that environment: 
+```bash
+conda activate poopy
+```
+Finally, we can actually install POOPy: 
+```bash
+pip install .
+```
+If install has happened correctly you should see something like `Successfully built poopy` printed to your terminal.
+
 ### Dependencies
 
 The package requires standard scientific Python packages (e.g. `numpy`, `pandas`, `matplotlib`) as well as the following packages:
@@ -51,16 +71,7 @@ The package requires standard scientific Python packages (e.g. `numpy`, `pandas`
 - [GDAL](https://gdal.org/download.html) - Required to manipulate geospatial datasets.
 - [pytest](https://docs.pytest.org/en/stable/) - For running the test suite [_optional_, see [Testing](#testing)].
 
-GDAL installation can frequently prove challenging. As a result, we advise installing GDAL _first_ seperately prior to installing `POOPy` (see below). Generally, we have encountered fewer problems with GDAL if it is installed via [conda](https://anaconda.org/conda-forge/gdal) (e.g., `conda install conda-forge::gdal`) than via `pip`.  
-
-Install this package by running the following command (replacing `[LOCAL DIRECTORY]` with the directory you wish to install the package into).
-
-## Install
-
-```bash
-git clone https://github.com/AlexLipp/POOPy.git [LOCAL DIRECTORY]
-pip install .
-```
+If using the instructions above, all dependencies should be installed automatically.
 
 ### API Keys
 
