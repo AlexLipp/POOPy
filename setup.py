@@ -27,6 +27,7 @@ setup(
         "numpy",
         "pandas",
         "pooch",
+        "pytest",
         "geojson",
         "gdal",  # osgeo package is usually installed via the GDAL package
         "requests",
