@@ -50,19 +50,19 @@ First, download the code-base from this repository to a sensible location on you
 ```bash
 git clone https://github.com/AlexLipp/POOPy.git [LOCAL DIRECTORY]
 ```
-Next, we create a conda environment with the required dependencies installed using the provided `.yaml` file. Run the following code from your `base` conda environment. 
+Navigate into the directory which contains the source code (it should contain a `setup.py` file). Next, we will create a conda environment with the required dependencies installed using the provided `.yaml` file. Run the following code from your `base` conda environment. 
 ```bash
 conda env create -f environment.yaml
 ```
-This creates an environment called `poopy` that has all the dependencies installed. Now, activate that environment: 
+This creates an environment called `poopy` that automatically installs POOPy's dependencies. Now, activate that environment: 
 ```bash
 conda activate poopy
 ```
-Finally, we can actually install POOPy: 
+Finally, we can actually install POOPy by running: 
 ```bash
 pip install .
 ```
-If install has happened correctly you should see something like `Successfully built poopy` printed to your terminal.
+If install has happened correctly you should see something like `Successfully built poopy` printed to your terminal. If you'd like to install an editable version of the package simply run: `pip install -e .` instead.  
 
 ### API Keys
 
