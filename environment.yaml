@@ -1,0 +1,13 @@
+name: poopy
+channels:
+  - conda-forge
+  - defaults
+dependencies:
+  - cython
+  - gdal
+  - geojson
+  - matplotlib
+  - numpy
+  - pandas
+  - pooch
+  - python
