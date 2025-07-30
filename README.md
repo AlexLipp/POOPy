@@ -44,9 +44,9 @@ Where historical information on CSO discharges are available (currently only pro
 
 ## Installation
 
-## Install
+POOPy is designed to be installed using the [conda](https://docs.conda.io/en/latest/) package manager. The following instructions were designed for UNIX systems (Linux, mac) but should also work on a Windows operating system by using Anaconda prompt.  
 
-POOPy is designed to be installed using the [conda](https://docs.conda.io/en/latest/) package manager. First, download the code-base from this repository to a sensible location on your computer: 
+First, download the code-base from this repository to a sensible location on your computer. This is easiest done using the following `git` command but you can also download the repository manually if you prefer.
 ```bash
 git clone https://github.com/AlexLipp/POOPy.git [LOCAL DIRECTORY]
 ```
@@ -54,7 +54,7 @@ Next, we create a conda environment with the required dependencies installed usi
 ```bash
 conda env create -f environment.yaml
 ```
-This creates a conda environment called `poopy` that has all the dependencies installed. Now, activate that environment: 
+This creates an environment called `poopy` that has all the dependencies installed. Now, activate that environment: 
 ```bash
 conda activate poopy
 ```
@@ -63,15 +63,6 @@ Finally, we can actually install POOPy:
 pip install .
 ```
 If install has happened correctly you should see something like `Successfully built poopy` printed to your terminal.
-
-### Dependencies
-
-The package requires standard scientific Python packages (e.g. `numpy`, `pandas`, `matplotlib`) as well as the following packages:
-
-- [GDAL](https://gdal.org/download.html) - Required to manipulate geospatial datasets.
-- [pytest](https://docs.pytest.org/en/stable/) - For running the test suite [_optional_, see [Testing](#testing)].
-
-If using the instructions above, all dependencies should be installed automatically.
 
 ### API Keys
 
