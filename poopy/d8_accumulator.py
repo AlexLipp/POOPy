@@ -161,6 +161,79 @@ class D8Accumulator:
             self._arr.shape
         )
 
+    def get_upstream_nodes(self, start_node: int) -> np.ndarray:
+        """
+        Get all nodes upstream of a given node. Returns an array of node IDs.
+
+        Parameters
+        ----------
+        start_node : int
+            Node ID to start the profile from. Must be a valid node ID.
+
+        Returns
+        -------
+        np.ndarray
+            Array of node IDs upstream of the start node.
+
+        Raises
+        ------
+        ValueError
+            If start_node is not a valid node ID
+        TypeError
+            If start_node is not an integer
+
+        """
+        self._check_valid_node(start_node)
+        n_donors = cf.count_donors(self._receivers)
+        delta = cf.ndonors_to_delta(n_donors)
+        donors = cf.make_donor_array(self._receivers, delta)
+
+        return np.asarray(cf.get_upstream_nodes(start_node, delta, donors))
+
+    def upstream_area(self, x: float, y: float) -> float:
+        """
+        Get the upstream area at a given coordinate.
+
+        Parameters
+        ----------
+        x : float
+            X coordinate of the point
+        y : float
+            Y coordinate of the point
+
+        Returns
+        -------
+        float
+            Upstream area at the given coordinate in square meters
+
+        Raises
+        ------
+        ValueError
+            If the coordinates are out of bounds
+
+        """
+        node = self.coord_to_node(x, y)
+        upstream_nodes = self.get_upstream_nodes(node)
+        cell_area = self.dx * self.dy  # Area of each cell in square meters
+        upstream_area = len(upstream_nodes) * cell_area  # Total upstream area
+        return upstream_area
+
+    @property
+    def dx(self) -> float:
+        """Get the pixel width in the D8 flow grid."""
+        if self.ds is None:
+            warnings.warn("\nNo GDAL Dataset object exists. Cannot get pixel width.")
+            return None
+        return self.ds.GetGeoTransform()[1]
+
+    @property
+    def dy(self) -> float:
+        """Get the pixel height in the D8 flow grid."""
+        if self.ds is None:
+            warnings.warn("\nNo GDAL Dataset object exists. Cannot get pixel height.")
+            return None
+        return abs(self.ds.GetGeoTransform()[5])
+
     def get_channel_segments(
         self, field: np.ndarray, threshold: float
     ) -> list[list[int]] | MultiLineString:
@@ -245,8 +318,13 @@ class D8Accumulator:
         if start_node < 0 or start_node >= self.arr.size:
             raise ValueError("start_node must be a valid node index")
 
-        dx = self.ds.GetGeoTransform()[1]
-        dy = self.ds.GetGeoTransform()[5] * -1
+        dx = self.dx
+        dy = self.dy
+        if dx is None or dy is None:
+            warnings.warn(
+                "\nNo GDAL Dataset object exists. Cannot get pixel width or height. Returning empty arrays."
+            )
+            return np.asarray([]), np.asarray([])
         profile, distance = cf.get_profile(
             start_node, dx, dy, self._receivers, self.arr.flatten()
         )
@@ -286,6 +364,13 @@ class D8Accumulator:
         if out > ncols * nrows or out < 0:
             raise ValueError("Coordinate is out of bounds")
         return out
+
+    def _check_valid_node(self, node: int) -> None:
+        """Check if a node is valid."""
+        if node < 0 or node >= self.arr.size:
+            raise ValueError("Node is out of bounds")
+        if not isinstance(node, int) and not np.issubdtype(type(node), np.integer):
+            raise TypeError("Node must be an integer")
 
     @property
     def receivers(self) -> np.ndarray:

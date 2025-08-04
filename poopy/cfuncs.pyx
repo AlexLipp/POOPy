@@ -361,6 +361,44 @@ def get_channel_segments(
 
 @cython.boundscheck(False)  # Deactivate bounds checking
 @cython.wraparound(False)   # Deactivate negative indexing.
+def get_upstream_nodes(
+    cnp.int64_t starting_node,
+    int[:] delta,
+    int[:] donors
+):
+    """
+    Returns the nodes upstream of a starting node in a D8 network.
+
+    Args:
+        starting_node: The starting node.
+        delta: The delta index array.
+        donors: The donor array.
+
+    Returns:
+        A list of node IDs upstream of the starting node.
+    """
+
+    # Create a vector nts to store the output
+    cdef vector[int] upstream_nodes
+    cdef stack[int] s  # FIFO Stack of nodes to visit
+    cdef int node # Current node
+    cdef int m # Donor node
+    cdef int n # Donor index
+
+    s.push(starting_node) # Add the starting node to the stack
+    while not s.empty():
+        node = s.top()
+        upstream_nodes.push_back(node)
+        s.pop()
+        # Loop over donors
+        for n in range(delta[node], delta[node + 1]):
+            m = donors[n]
+            if m != node:
+                s.push(m)
+    return upstream_nodes
+
+@cython.boundscheck(False)  # Deactivate bounds checking
+@cython.wraparound(False)   # Deactivate negative indexing.
 cpdef (int, int) ItoXY(int i, int ncols):
     """
     Converts a node index for a 2D array to an x, y pair of col, row indices.

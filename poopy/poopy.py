@@ -79,6 +79,7 @@ class Monitor:
         self._discharge_in_last_48h: bool = discharge_in_last_48h
         self._current_event: Event = None
         self._history: list[Event] = None
+        self._node = None  # Set initially to None but this is stored for future use
 
     @property
     def site_name(self) -> str:
@@ -99,6 +100,15 @@ class Monitor:
     def y_coord(self) -> float:
         """Return the Y coordinate of the site."""
         return self._y_coord
+
+    @property
+    def node(self) -> int:
+        """Return the node of the site in the D8 accumulator."""
+        if self._node is None:
+            self._node = self.water_company.accumulator.coord_to_node(
+                self.x_coord, self.y_coord
+            )
+        return self._node
 
     @property
     def receiving_watercourse(self) -> str:
@@ -706,7 +716,11 @@ class WaterCompany(ABC):
         get_downstream_info_geojson: Get a GeoJSON feature collection of more detailed information at the downstream points for current discharges.
         get_historical_downstream_info_geojson: Get a GeoJSON feature collection of more detailed information at the downstream points for discharges *AT A GIVEN HISTORICAL TIME*.
         plot_current_status: Plot the current status of the Water Company network showing the downstream impact & monitor statuses.
+        get_monitor_timeseries: Get a timeseries of the monitor's status (online, active, recent) at given times.
         get_historical_downstream_impact_at: Calculates the downstream extent of all monitors that were discharging (or, optionally, recently discharging) at a given time *AT A GIVEN HISTORICAL TIME*.
+        get_monitors_upstream: Get a list of upstream monitors from a point.
+        number_of_upstream_discharges: Get the number of upstream discharges from a point, optionally at a given time.
+
 
     """
 
@@ -912,6 +926,65 @@ class WaterCompany(ABC):
 
         return file_path
 
+    def get_monitors_upstream(self, x: float, y: float) -> list[Monitor]:
+        """Get all monitors that are upstream of the given coordinates."""
+        upstream_monitors = []
+        acc = self.accumulator
+        ups = acc.get_upstream_nodes(acc.coord_to_node(x, y))
+        for monitor in self.active_monitors.values():
+            if monitor.node in ups:
+                upstream_monitors.append(monitor)
+        return upstream_monitors
+
+    def number_of_upstream_discharges(
+        self,
+        x: float,
+        y: float,
+        include_recent_discharges: bool = False,
+        time: datetime.datetime = None,
+    ) -> tuple[float]:
+        """
+        Count the number of upstream discharges at the given coordinates. Optionally, retrieve discharges at a specific time or include recent discharges (i.e., those in the last 48 hours).
+
+        Args:
+            x : The x-coordinate of the point to check.
+            y : The y-coordinate of the point to check.
+            include_recent_discharges: Whether to include discharges from the last 48 hours.
+            time : The specific time to check for discharges. If None, checks current status.
+
+        Returns:
+            Tuple[float]: A tuple containing the number of discharges and the number of discharges per unit area upstream.
+
+        """
+        upstream_monitors = self.get_monitors_upstream(x, y)
+        acc = self.accumulator
+        upstream_area = (
+            len(acc.get_upstream_nodes(acc.coord_to_node(x, y))) * acc.dx * acc.dy
+        )
+        num = 0
+
+        if time is None:
+            for monitor in upstream_monitors:
+                if include_recent_discharges:
+                    if monitor.discharge_in_last_48h:
+                        num += 1
+                else:
+                    if monitor.current_status == "Discharging":
+                        num += 1
+        else:
+            for monitor in upstream_monitors:
+                if include_recent_discharges:
+                    if monitor.recent_discharge_at(time=time):
+                        num += 1
+                else:
+                    if (
+                        monitor.event_at(time=time) is not None
+                        and monitor.event_at(time=time).event_type == "Discharging"
+                    ):
+                        num += 1
+
+        return num, num / upstream_area
+
     # Define the getters for the WaterCompany class
     @property
     def name(self) -> str:
@@ -1108,7 +1181,7 @@ class WaterCompany(ABC):
         # Add the sources for each impacted node to the dictionary of properties
         for monitor in sources:
             try:
-                node = self.accumulator.coord_to_node(monitor.x_coord, monitor.y_coord)
+                node = monitor.node
             except ValueError as e:
                 warnings.warn(
                     f"Skipping out of bounds monitor {monitor.site_name}: {e}"
