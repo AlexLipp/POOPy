@@ -10,7 +10,6 @@
 - [Description](#description)
 - [Installation](#installation)
   - [Dependencies](#dependencies)
-  - [API Keys](#api-keys)
   - [Testing](#testing)
 - [Usage](#usage)
     - [Examples](#examples)
@@ -22,7 +21,9 @@
 
 ## Description
 
-This is a Python package for interfacing with live data from Event Duration Monitoring (EDM) devices maintained by English and Welsh Water Companies. This package was ostensibly developed to provide the back-end for [SewageMap.co.uk](https://github.com/AlexLipp/thames-sewage) but may be generically useful for those **exploring the impact of sewage discharges on rivers**. Currently, `POOPy` supports data from all of the major water and sewerage companies: 
+This is a Python package for interfacing with live data from Event Duration Monitoring (EDM) devices maintained by English and Welsh Water Companies. This package was ostensibly developed to provide the back-end for [SewageMap.co.uk](https://github.com/AlexLipp/thames-sewage) but may be generically useful for those **exploring the impact of sewage discharges on rivers**. More information can be found in our [preprint](https://eartharxiv.org/repository/view/9773/).
+
+ Currently, `POOPy` supports data from all of the major water and sewerage companies: 
 
 | Water Company                        | `WaterCompany` Object Name  |
 |------------------------------------|-----------------------|
