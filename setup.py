@@ -14,7 +14,7 @@ extensions = [
 
 setup(
     name="poopy",
-    version="0.4.4",
+    version="0.5.4",
     ext_modules=cythonize(extensions),
     include_dirs=[numpy.get_include()],
     packages=find_packages(),
