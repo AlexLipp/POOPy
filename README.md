@@ -64,26 +64,6 @@ pip install .
 ```
 If install has happened correctly you should see something like `Successfully built poopy` printed to your terminal. If you'd like to install an editable version of the package simply run: `pip install -e .` instead.  
 
-### API Keys
-
-To access the data for the following water companies, you will need to obtain API keys from the relevant water company by registering with their developer portal: 
-
-- [Thames Water](https://data.thameswater.co.uk/s/)
-
-From these portals you will obtain `client_id` and `client_secret` keys which are required to access the datasets. `POOPy` will look for these keys in the _environment variables_ of your system. Specifically, it will look for the following variables which must be set in your system environment: 
-
-| Key                        | Environment Variable  |
-|------------------------------------|-----------------------|
-| Thames Water client ID  | `TW_CLIENT_ID`        |
-| Thames Water 'secret' ID  | `TW_CLIENT_SECRET`    |
-
-How to set these environment variables will depend on your operating system. For example, on a Unix-based system, you could add the following lines to your `.bashrc` or `.bash_profile` file: 
-
-```bash
-export TW_CLIENT_ID="your_client_id"
-export TW_CLIENT_SECRET="your_client_secret"
-```
-
 ### Testing 
 
 A test script is provided in the `tests` folder. To run the tests, you will need to install the [`pytest` package](https://docs.pytest.org/en/stable/). If installed, the tests can be run from the command line by navigating to the folder in which the package is installed and simply running the command: 
