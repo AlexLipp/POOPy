@@ -720,7 +720,7 @@ class WaterCompany(ABC):
         get_historical_downstream_impact_at: Calculates the downstream extent of all monitors that were discharging (or, optionally, recently discharging) at a given time *AT A GIVEN HISTORICAL TIME*.
         get_monitors_upstream: Get a list of upstream monitors from a point.
         number_of_upstream_discharges: Get the number of upstream discharges from a point, optionally at a given time.
-
+        snap_to_drainage: Snap a point to the nearest river channel above a given threshold.
 
     """
 
@@ -1238,6 +1238,110 @@ class WaterCompany(ABC):
                 if event is not None and event.event_type == "Discharging":
                     sources.append(monitor)
         return sources
+
+    def snap_to_drainage(
+        self,
+        xy: tuple[float],
+        area_threshold: float,
+        nudge_xy: tuple[float] = (0, 0),
+        plot: bool = False,
+    ) -> tuple[float, float]:
+        """
+        Snap a point to the nearest drainage channel above a certain area threshold.
+
+        Args:
+            xy: The (x, y) coordinates of the point to snap.
+            area_threshold: The minimum area threshold for a channel to be considered. Units of input D8
+            nudge_xy: Optionally, "nudge", the coordinates by nudge_xy[0] and nudge_xy[1].
+            plot: Whether to plot the results.
+
+        Returns:
+            A tuple containing the (x, y) coordinates of the drainage aligned point.
+
+        """
+        # Unpack the input tuples
+        x, y = xy
+        nudge_x, nudge_y = nudge_xy
+
+        # Access the drainage accumulator
+        acc = self.accumulator
+
+        # Apply nudging (this can help move a site to the correct location on the channnel)
+        x_ = x + nudge_x
+        y_ = y + nudge_y
+
+        # Calculate
+        cell_area = acc.dx * acc.dy
+
+        # Calculate area in units of the provided D8 (sq metres)
+        area = acc.accumulate(np.ones(acc.arr.shape) * cell_area).flatten()
+        # Access channels which is areas above some userdefined threshold upstream area
+        channels = np.where(area > area_threshold)
+        # Access the channel areas
+        channel_areas = area[channels]
+        # Get the channel coordinates
+        channel_coords = np.vstack(acc.nodes_to_coords(channels)).T
+        # Find the distance from this point from each channel node
+        distance_to_channel = np.sqrt(((channel_coords - [x_, y_]) ** 2).sum(axis=1))
+        closest_channel = channel_coords[np.argmin(distance_to_channel)]
+
+        if plot:
+            # Optional plotting to check that results are sensible
+            print("Plotting snapped channel...")
+
+            # These are the parameters for the channel pixel visualization
+            channel_pixel_scaler = 5  # Size of channel pixels in the plot
+            channel_pixel_min_size = (
+                0.05  # Ensures smallest area is not too small to see
+            )
+
+            plt.figure(figsize=(8, 10))
+            # Add hillshade (i.e., D8) to make plot more appealing
+            plt.imshow(acc.arr, cmap="Greys_r", alpha=0.2, extent=acc.extent, zorder=0)
+
+            # Create sizes of channel pixels for prettier plotting
+            loga = np.log10(channel_areas)
+            min_area = np.min(loga)
+            max_area = np.max(loga)
+            chan_pix_size = (
+                channel_pixel_scaler
+                * (loga - min_area + channel_pixel_min_size)
+                / (max_area - min_area)
+            )
+            # Plot channels
+            plt.scatter(
+                channel_coords[:, 0],
+                channel_coords[:, 1],
+                s=chan_pix_size,
+                c="blue",
+                label="Channel Pixel",
+            )
+            # Draw a grey line between the original and nudged points
+            plt.plot([x, x_], [y, y_], c="grey", linestyle="-")
+            # Add a black line between the closest channel and the nudged point
+            plt.plot(
+                [x_, closest_channel[0]],
+                [y_, closest_channel[1]],
+                c="black",
+                linestyle="-",
+            )
+            # Add the original point as a red cross
+            plt.scatter(x, y, c="red", label="Original Point", marker="x", s=100)
+            # Add the nudged point in orange
+            plt.scatter(x_, y_, c="orange", label="Nudged Point", marker="x", s=100)
+            # Add the nearest channel point in green
+            plt.scatter(
+                closest_channel[0],
+                closest_channel[1],
+                c="green",
+                label="Snapped Channel",
+                marker="x",
+                s=100,
+            )
+            plt.legend()
+            plt.show()
+
+        return closest_channel[0], closest_channel[1]
 
     def get_downstream_info_geojson(
         self, include_recent_discharges=False

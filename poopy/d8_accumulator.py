@@ -353,6 +353,47 @@ class D8Accumulator:
         y_coord += dy / 2  # recall that dy is negative
         return x_coord, y_coord
 
+    def nodes_to_coords(self, nodes: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
+        """
+        Convert an array of node indices to coordinate pairs for the centre of the pixels.
+
+        Parameters
+        ----------
+        nodes : np.ndarray
+            Array of node indices to convert
+
+        Returns
+        -------
+        Tuple[np.ndarray, np.ndarray]
+            Tuple of arrays containing x and y coordinates
+
+        Raises
+        ------
+        ValueError
+            If any node is out of bounds
+
+        """
+        nodes = np.asarray(nodes)
+        nrows, ncols = self.arr.shape
+
+        # Check bounds for all nodes at once
+        if np.any((nodes >= ncols * nrows) | (nodes < 0)):
+            raise ValueError("One or more nodes are out of bounds")
+
+        # Vectorized conversion to x, y indices
+        x_indices = nodes % ncols
+        y_indices = nodes // ncols
+
+        # Get geotransform parameters
+        ulx, dx, _, uly, _, dy = self.ds.GetGeoTransform()
+
+        # Vectorized coordinate calculation
+        x_coords = ulx + dx * x_indices + dx / 2
+        y_coords = uly + dy * y_indices + dy / 2
+
+        # Stack coordinates into (n, 2) array
+        return x_coords, y_coords
+
     def coord_to_node(self, x: float, y: float) -> int:
         """Convert a coordinate pair to a node index. Returns the node index of the pixel that contains the coordinate."""
         nrows, ncols = self.arr.shape
