@@ -5,6 +5,7 @@ channels:
 dependencies:
   - cython
   - gdal
+  - libgdal-hdf5
   - geojson
   - matplotlib
   - numpy
