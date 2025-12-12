@@ -70,10 +70,10 @@ class SouthWestWater(WaterCompany):
         x, y = latlong_to_osgb(row["latitude"], row["longitude"])
 
         # South West Water does not always provide a site name or even an ID, which can make identification challenging.
-        if pd.isna(row["ID"]):
+        if pd.isna(row["Id"]):
             name = "Unknown"
         else:
-            name = row["ID"]
+            name = row["Id"]
 
         # if monitor currently discharging we set last_48h to be True.
         if row["status"] == 1:
@@ -131,6 +131,6 @@ class SouthWestWater(WaterCompany):
         else:
             # Raise an exception if the status is not -1, 0 or 1 (should not happen!)
             raise Exception(
-                "Unknown status type " + row["status"] + " for monitor " + row["ID"]
+                "Unknown status type " + row["status"] + " for monitor " + row["Id"]
             )
         return event
