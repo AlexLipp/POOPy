@@ -6,6 +6,7 @@ import warnings
 from abc import ABC, abstractmethod
 from typing import Union
 
+import geopandas as gpd
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
@@ -13,6 +14,7 @@ import pooch
 import requests
 from geojson import Feature, FeatureCollection, MultiLineString, Point
 from matplotlib.colors import LogNorm
+from shapely import MultiLineString as shMLS
 
 from poopy.d8_accumulator import D8Accumulator
 
@@ -1140,6 +1142,27 @@ class WaterCompany(ABC):
         # Convert the downstream impact to a geojson
         return self._accumulator.get_channel_segments(downstream_impact, threshold=0.9)
 
+    def get_downstream_geodatabase(
+        self, include_recent_discharges: bool = False
+    ) -> gpd.GeoDataFrame:
+        """
+        Get a GeoDataFrame of the downstream points for all active discharges in WGS84 coordinates.
+
+        Args:
+            include_recent_discharges: Whether to include discharges that have occurred in the last 48 hours. Defaults to False.
+
+        Returns:
+            A GeoDataFrame of the downstream points for all active (or optionally recent) discharges.
+
+        """
+        # Calculate the downstream impact
+        geojson = self.get_downstream_geojson(
+            include_recent_discharges=include_recent_discharges
+        )
+        geometry = shMLS(geojson["coordinates"])
+        # Convert the GeoJSON to a GeoDataFrame
+        return gpd.GeoDataFrame(geometry=[geometry], crs="EPSG:27700")
+
     def _calculate_downstream_info(self, sources: list[Monitor]) -> FeatureCollection:
         """
         Calculate the downstream impact of a list of source monitors and return a GeoJSON FeatureCollection of the downstream points.
@@ -1367,6 +1390,33 @@ class WaterCompany(ABC):
         else:
             sources = self.discharging_monitors
         return self._calculate_downstream_info(sources)
+
+    def get_downstream_info_geodatabase(
+        self, include_recent_discharges=False
+    ) -> gpd.GeoDataFrame:
+        """
+        Get a GeoDataFrame of the downstream points for all CURRENT active discharges in BNG coordinates.
+
+        Contains information on number of upstream sources, the list of CSOs and the number of CSOs per km2.
+
+        Args:
+            include_recent_discharges: Whether to include discharges that have occurred in the last 48 hours. Defaults to False.
+
+        Returns:
+            A GeoDataFrame of the downstream points for all active discharges.
+
+        """
+        # Check that "include_recent_discharges" is a boolean
+        if not isinstance(include_recent_discharges, bool):
+            raise ValueError("include_recent_discharges must be a boolean")
+
+        if include_recent_discharges:
+            sources = self.recently_discharging_monitors
+        else:
+            sources = self.discharging_monitors
+
+        geojson = self._calculate_downstream_info(sources)
+        return gpd.GeoDataFrame.from_features(geojson["features"], crs="EPSG:27700")
 
     def get_historical_downstream_info_geojson_at(
         self, time: datetime.datetime, include_recent_discharges=False
