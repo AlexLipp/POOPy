@@ -29,7 +29,9 @@ setup(
         "pooch",
         "pytest",
         "geojson",
+        "geopandas",
         "gdal",  # osgeo package is usually installed via the GDAL package
         "requests",
+        "shapely",
     ],
 )
