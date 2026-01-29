@@ -1,5 +1,7 @@
 """Module for Thames Water API interaction."""
 
+import random
+import time
 import warnings
 from collections.abc import Callable
 from datetime import datetime
@@ -228,7 +230,7 @@ class ThamesWater(WaterCompany):
 
     def _handle_history_api_response(self, url: str, params: str) -> pd.DataFrame:
         """
-        Createsand handles the response from the API.
+        Create and handles the response from the API.
 
         If the response is valid, it returns a dataframe of the response.
         Otherwise, it raises an exception. The function loops through the API calls until a record is returned that has a datetime
@@ -248,80 +250,132 @@ class ThamesWater(WaterCompany):
             + "\033[0m"
         )
         df = pd.DataFrame()
+
         while True:
-            r = requests.get(
-                url,
-                params=params,
-            )
-            print("\033[36m" + "\tRequesting from " + r.url + "\033[0m")
+            # Retry logic for API requests
+            max_retries = 5
+            base_delay = 5  # Start with 5 seconds
 
-            # check response status and use only valid requests
-            if r.status_code == 200:
-                response = r.json()
-                # If no items are returned, handle it here. Think hard on how to handle this.
-                if "items" not in response:
-                    # Raise an exception if the response is empty.
-                    nrecords = df.shape[0]
+            for attempt in range(max_retries):
+                try:
+                    r = requests.get(url, params=params)
+                    print("\033[36m" + "\tRequesting from " + r.url + "\033[0m")
 
-                    # TODO: handle this exception more elegantly...
-                    # ...Maybe if last record returned is really close to HISTORY_VALID_UNTIL then don't raise an exception.
-                    # Cannot just return records because it gives false impression that all records have been fetched.
-                    raise Exception(
-                        f"\n\t!ERROR! \n\tAPI returned no items for request: {r.url} \n\t! ABORTING !"
-                        + "\n\t"
-                        + "-" * 80
-                        + "\n\tThis error is *probably* caused by the API erroneously returning an empty response in place of an error..."
-                        + "\n\t...but it could also be caused by the API genuinely returning no records."
-                        + "\n\tThis might occur if there have been *exactly* an integer multiple of the API limit number of events (e.g., 0, 1000, 2000 etc.)."
-                        + "\n\tAt present there is no way to distinguish between these two cases (which is the fault of the API, not this code)."
-                        + "\n\tIf you think this is the case, try using the _handle_current_api_response function instead or modifying HISTORY_VALID_UNTIL."
-                        + "\n\t"
-                        + "-" * 80
-                        + f"\n\tNumber of records fetched before error: {nrecords}"
-                    )
-                else:
-                    df_temp = pd.json_normalize(response["items"])
-                    df_temp = self._transform_api_response(
-                        df_temp
-                    )  # Transform from v2 format for compatibility
-                    # Extract the datetime of the last record fetched and cast it to a datetime object
-                    last_record_datetime = pd.to_datetime(df_temp["DateTime"].iloc[-1])
-                    if last_record_datetime < self.HISTORY_VALID_UNTIL:
-                        print(
-                            "\033[36m"
-                            + f"\tFound a record with datetime {last_record_datetime} before `valid until' date {self.HISTORY_VALID_UNTIL}."
-                            + "\033[0m"
+                    # Check for quota exceeded error
+                    if r.status_code == 429:
+                        error_msg = r.json().get("error", "Unknown error")
+                        if (
+                            "quota" in error_msg.lower()
+                            or "exceeded" in error_msg.lower()
+                        ):
+                            if attempt < max_retries - 1:
+                                # Calculate delay with exponential backoff and jitter
+                                delay = base_delay * (2**attempt) + random.uniform(
+                                    0, 30
+                                )
+                                print(
+                                    f"\033[93m\tAPI quota exceeded. Attempt {attempt + 1}/{max_retries}. "
+                                    f"Waiting {delay:.1f} seconds before retrying...\033[0m"
+                                )
+                                time.sleep(delay)
+                                continue
+                            else:
+                                print(
+                                    f"\033[91m\tAPI quota exceeded after {max_retries} attempts. "
+                                    f"Please try again later.\033[0m"
+                                )
+                                raise Exception(
+                                    f"API quota exceeded after {max_retries} retry attempts. "
+                                    f"Error: {error_msg}"
+                                )
+                        else:
+                            raise Exception(
+                                f"Request failed with status code {r.status_code}, and error message: {r.json()}"
+                            )
+
+                    # Check for other HTTP errors
+                    elif r.status_code != 200:
+                        raise Exception(
+                            f"Request failed with status code {r.status_code}, and error message: {r.json()}"
                         )
 
-                        # Check the number of rows and compare to the API limit
-                        if df_temp.shape[0] < self.API_LIMIT:
-                            # If the number of records is less than the API limit, then we have fetched all records
-                            print(
-                                "\033[36m"
-                                + f"\tLast request contained {df_temp.shape[0]} many records, fewer than the API limit of {self.API_LIMIT}."
-                                + "\033[0m"
-                            )
-                            print(
-                                "\033[36m" + "\tNo more records to fetch!" + "\033[0m"
-                            )
-                            df = pd.concat([df, df_temp])
-                            break
-                        else:
-                            # If the number of records is equal to the API limit, possibly more records to fetch so we continue.
-                            print(
-                                "\033[36m"
-                                + f"\tLast request contained {df_temp.shape[0]} many records, equal to the API limit of {self.API_LIMIT}."
-                                + "\033[0m"
-                            )
-                            print(
-                                "\033[36m"
-                                + "\tChecking if there are more records to fetch..."
-                                + "\033[0m"
-                            )
-            else:
+                    # Success - break out of retry loop
+                    break
+
+                except requests.exceptions.RequestException as e:
+                    if attempt < max_retries - 1:
+                        delay = base_delay * (2**attempt) + random.uniform(0, 30)
+                        print(
+                            f"\033[93m\tNetwork error occurred. Attempt {attempt + 1}/{max_retries}. "
+                            f"Waiting {delay:.1f} seconds before retrying...\033[0m"
+                        )
+                        time.sleep(delay)
+                        continue
+                    else:
+                        raise Exception(
+                            f"Network error after {max_retries} attempts: {str(e)}"
+                        )
+
+            # Process the successful response
+            response = r.json()
+            # If no items are returned, handle it here. Think hard on how to handle this.
+            if "items" not in response:
+                # Raise an exception if the response is empty.
+                nrecords = df.shape[0]
+
+                # TODO: handle this exception more elegantly...
+                # ...Maybe if last record returned is really close to HISTORY_VALID_UNTIL then don't raise an exception.
+                # Cannot just return records because it gives false impression that all records have been fetched.
                 raise Exception(
-                    f"\tRequest failed with status code {r.status_code}, and error message: {r.json()}"
+                    f"\n\t!ERROR! \n\tAPI returned no items for request: {r.url} \n\t! ABORTING !"
+                    + "\n\t"
+                    + "-" * 80
+                    + "\n\tThis error is *probably* caused by the API erroneously returning an empty response in place of an error..."
+                    + "\n\t...but it could also be caused by the API genuinely returning no records."
+                    + "\n\tThis might occur if there have been *exactly* an integer multiple of the API limit number of events (e.g., 0, 1000, 2000 etc.)."
+                    + "\n\tAt present there is no way to distinguish between these two cases (which is the fault of the API, not this code)."
+                    + "\n\tIf you think this is the case, try using the _handle_current_api_response function instead or modifying HISTORY_VALID_UNTIL."
+                    + "\n\t"
+                    + "-" * 80
+                    + f"\n\tNumber of records fetched before error: {nrecords}"
                 )
+            else:
+                df_temp = pd.json_normalize(response["items"])
+                df_temp = self._transform_api_response(
+                    df_temp
+                )  # Transform from v2 format for compatibility
+                # Extract the datetime of the last record fetched and cast it to a datetime object
+                last_record_datetime = pd.to_datetime(df_temp["DateTime"].iloc[-1])
+                if last_record_datetime < self.HISTORY_VALID_UNTIL:
+                    print(
+                        "\033[36m"
+                        + f"\tFound a record with datetime {last_record_datetime} before `valid until' date {self.HISTORY_VALID_UNTIL}."
+                        + "\033[0m"
+                    )
+
+                    # Check the number of rows and compare to the API limit
+                    if df_temp.shape[0] < self.API_LIMIT:
+                        # If the number of records is less than the API limit, then we have fetched all records
+                        print(
+                            "\033[36m"
+                            + f"\tLast request contained {df_temp.shape[0]} many records, fewer than the API limit of {self.API_LIMIT}."
+                            + "\033[0m"
+                        )
+                        print("\033[36m" + "\tNo more records to fetch!" + "\033[0m")
+                        df = pd.concat([df, df_temp])
+                        break
+                    else:
+                        # If the number of records is equal to the API limit, possibly more records to fetch so we continue.
+                        print(
+                            "\033[36m"
+                            + f"\tLast request contained {df_temp.shape[0]} many records, equal to the API limit of {self.API_LIMIT}."
+                            + "\033[0m"
+                        )
+                        print(
+                            "\033[36m"
+                            + "\tChecking if there are more records to fetch..."
+                            + "\033[0m"
+                        )
             df = pd.concat([df, df_temp])
             params["offset"] += params["limit"]  # Increment offset for the next request
         df.reset_index(drop=True, inplace=True)
