@@ -6,6 +6,7 @@ dependencies:
   - cython
   - gdal
   - libgdal-hdf5
+  - libgdal-netcdf
   - geojson
   - matplotlib
   - numpy
@@ -14,3 +15,4 @@ dependencies:
   - python
   - pytest
   - requests
+  - shapely
