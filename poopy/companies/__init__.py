@@ -2,6 +2,7 @@
 
 from .anglian_water import AnglianWater
 from .northumbrian_water import NorthumbrianWater
+from .scottish_water import ScottishWater
 from .severn_trent import SevernTrentWater
 from .southern_water import SouthernWater
 from .southwest_water import SouthWestWater
@@ -22,4 +23,5 @@ __all__ = [
     "YorkshireWater",
     "NorthumbrianWater",
     "SevernTrentWater",
+    "ScottishWater",
 ]
