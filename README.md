@@ -37,6 +37,7 @@ This is a Python package for interfacing with live data from Event Duration Moni
 | Northumbrian Water | `NorthumbrianWater` |
 | South West Water | `SouthWestWater` |
 | Wessex Water | `WessexWater` |
+| Scottish Water| `ScottishWater` |
 
 
 Different water companies share their [live EDM data](https://www.streamwaterdata.co.uk/pages/storm-overflows-data) via APIs with different formats. This is obviously confusing and means that **it is hard to access national data simultaneously** and ultimately understand their potential impact on the environment. `POOPy` solves this problem by **encapsulating** relevant information about EDM monitors maintained by different water companies into a **standardised interface**. This interface (represented by the `WaterCompany` and `Monitor` classes) makes it very easy to, for instance, quickly identify monitors that are discharging, have discharged in the last 48 hours or are offline. `POOPy` combines this information with **key meta-data about the monitor** such as location and the watercourse it discharges into. Additionally, `POOPy` provides a basic approache to explore the 'impact' of discharges on the environment, using a simple hydrological model to identify **river sections downstream of sewage discharges** in real-time. `POOPy` could easily be extended to consider more complicated ways of exploring the 'impact' of sewage spills (e.g., [dynamic river flow](https://github.com/AlexLipp/thames-sewage/issues/31)).
