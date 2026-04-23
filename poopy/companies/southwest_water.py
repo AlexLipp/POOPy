@@ -21,8 +21,10 @@ class SouthWestWater(WaterCompany):
     HISTORICAL_API_RESOURCE = ""
     API_LIMIT = 1000  # Max num of outputs that can be requested from the API at once
 
-    D8_FILE_URL = "https://zenodo.org/records/14238014/files/southwest_d8.nc?download=1"
-    D8_FILE_HASH = "md5:1df4df2f3d7afac19c1d8f9dcf794882"
+    D8_FILE_URL = (
+        "https://zenodo.org/records/19709169/files/southwest_d8.tif?download=1"
+    )
+    D8_FILE_HASH = "md5:3e9068d1eb30c8364ea7ac13a7b56b2e"
 
     def __init__(self, client_id="", client_secret=""):
         """Initialise a South West Water object."""

@@ -31,8 +31,8 @@ class ThamesWater(WaterCompany):
     # and a long period of offline that follows.
 
     # The URL and hash of the D8 raster file on the server
-    D8_FILE_URL = "https://zenodo.org/records/14238014/files/thames_d8.nc?download=1"
-    D8_FILE_HASH = "md5:1047a14906237cd436fd483e87c1647d"
+    D8_FILE_URL = "https://zenodo.org/records/19709169/files/thames_d8.tif?download=1"
+    D8_FILE_HASH = "md5:c9ec32f43a0b77a8f616dd24a19828df"
 
     def __init__(self, client_id="", client_secret=""):
         """Initialise a Thames Water object."""

@@ -164,7 +164,7 @@ def test_thames_water_init():
     assert tw.client_secret == ""
 
     # Check that the accumulator is initialized correctly with the correct extent (in OSGB)
-    assert tw.accumulator.extent == [319975.0, 620025.0, 79975.0, 280025.0]
+    assert tw.accumulator.extent == [319975.0, 619975.0, 80025.0, 280025.0]
     # Now test the rest of the object which is common to all WaterCompany objects
     check_watercompany(tw)
 
