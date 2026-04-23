@@ -6,6 +6,7 @@ import pandas as pd
 import requests
 
 from poopy.poopy import Discharge, Event, Monitor, NoDischarge, Offline, WaterCompany
+from poopy.utils import latlong_to_osgb
 
 
 class ScottishWater(WaterCompany):
@@ -112,18 +113,30 @@ class ScottishWater(WaterCompany):
         See `_fetch_current_status_df`.
         """
         current_time = self._timestamp
-        # Cast these to float
-        x = row["DISCHARGE_OVERFLOW_LOCATION_X"]
-        y = row["DISCHARGE_OVERFLOW_LOCATION_Y"]
-        # If either 'x' or 'y' is '' set it to be 0
-        if x == "":
-            x = 0
-        if y == "":
-            y = 0
-        # Cast these to float
-        x = float(x)
-        y = float(y)
-        status_id = row["OVERFLOW_STATUS_ID"]
+
+        # The API returns all values as strings; cast status ID to int for comparison.
+        # Fall back to STATUS_NO_DATA if the value is missing or not a valid integer.
+        try:
+            status_id = int(row["OVERFLOW_STATUS_ID"])
+        except (ValueError, TypeError):
+            status_id = self.STATUS_NO_DATA
+
+        x_raw = row["DISCHARGE_OVERFLOW_LOCATION_X"]
+        y_raw = row["DISCHARGE_OVERFLOW_LOCATION_Y"]
+        if x_raw != "" and y_raw != "":
+            x = float(x_raw)
+            y = float(y_raw)
+        else:
+            # Fall back to lat/long conversion when OSGB coordinates are missing.
+            # If lat/long are also missing, use (0, 0) so the null-island check
+            # in the base class filters the monitor out.
+            try:
+                x, y = latlong_to_osgb(
+                    float(row["DISCHARGE_OVERFLOW_LOCATION_LATITUDE"]),
+                    float(row["DISCHARGE_OVERFLOW_LOCATION_LONGITUDE"]),
+                )
+            except (ValueError, TypeError):
+                x, y = 0.0, 0.0
 
         if status_id == self.STATUS_OVERFLOWING:
             last_48h = True
@@ -163,7 +176,12 @@ class ScottishWater(WaterCompany):
 
         See `_fetch_current_status_df`.
         """
-        status_id = row["OVERFLOW_STATUS_ID"]
+        # The API returns all values as strings; cast status ID to int for comparison.
+        # Fall back to STATUS_NO_DATA if the value is missing or not a valid integer.
+        try:
+            status_id = int(row["OVERFLOW_STATUS_ID"])
+        except (ValueError, TypeError):
+            status_id = self.STATUS_NO_DATA
 
         if status_id == self.STATUS_OVERFLOWING:
             start_time = self._parse_datetime(row.get("OVERFLOW_START_DATETIME", ""))
