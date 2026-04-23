@@ -25,8 +25,8 @@ class ScottishWater(WaterCompany):
     API_ROOT = "https://api.scottishwater.co.uk/overflow-event-monitoring/v1"
     CURRENT_API_RESOURCE = "/near-real-time"
     HISTORICAL_API_RESOURCE = ""
-    D8_FILE_URL = "PLACEHOLDER"  # TODO: Update with Zenodo URL once uploaded
-    D8_FILE_HASH = "PLACEHOLDER"  # TODO: Update with MD5 hash once uploaded
+    D8_FILE_URL = "https://zenodo.org/records/19709169/files/scottish_d8.tif?download=1"
+    D8_FILE_HASH = "md5:165e43e8ba805c0ac2f38fa0324c454e"
 
     STATUS_OVERFLOWING = 13
     STATUS_RECENT_OVERFLOW = 14
@@ -112,8 +112,17 @@ class ScottishWater(WaterCompany):
         See `_fetch_current_status_df`.
         """
         current_time = self._timestamp
+        # Cast these to float
         x = row["DISCHARGE_OVERFLOW_LOCATION_X"]
         y = row["DISCHARGE_OVERFLOW_LOCATION_Y"]
+        # If either 'x' or 'y' is '' set it to be 0
+        if x == "":
+            x = 0
+        if y == "":
+            y = 0
+        # Cast these to float
+        x = float(x)
+        y = float(y)
         status_id = row["OVERFLOW_STATUS_ID"]
 
         if status_id == self.STATUS_OVERFLOWING:
