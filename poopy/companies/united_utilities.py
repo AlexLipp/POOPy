@@ -24,9 +24,9 @@ class UnitedUtilities(WaterCompany):
     API_LIMIT = 2000  # Max num of outputs that can be requested from the API at once
 
     D8_FILE_URL = (
-        "https://zenodo.org/records/14238014/files/unitedutilities_d8.nc?download=1"
+        "https://zenodo.org/records/19709169/files/unitedutilities_d8.tif?download=1"
     )
-    D8_FILE_HASH = "md5:ebd906bc2ebb3239cb8ae40dca71f9a1"
+    D8_FILE_HASH = "md5:2051353eb71d6a51ac7dff012336a0f4"
 
     def __init__(self, client_id="", client_secret=""):
         """Initialise a United Utilities object."""

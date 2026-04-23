@@ -21,8 +21,8 @@ class WessexWater(WaterCompany):
     HISTORICAL_API_RESOURCE = ""
     API_LIMIT = 2000  # Max num of outputs that can be requested from the API at once
 
-    D8_FILE_URL = "https://zenodo.org/records/14238014/files/wessex_d8.nc?download=1"
-    D8_FILE_HASH = "md5:ad906953e7cbb8ff816068c5308dadc3"
+    D8_FILE_URL = "https://zenodo.org/records/19709169/files/wessex_d8.tif?download=1"
+    D8_FILE_HASH = "md5:6f6dec6bcea01cbfcafdeb5b78bf0253"
 
     def __init__(self, client_id="", client_secret=""):
         """Initialise a Wessex Water object."""

@@ -18,6 +18,7 @@ from numpy import isnan
 from poopy.companies import (
     AnglianWater,
     NorthumbrianWater,
+    ScottishWater,
     SevernTrentWater,
     SouthernWater,
     SouthWestWater,
@@ -163,7 +164,7 @@ def test_thames_water_init():
     assert tw.client_secret == ""
 
     # Check that the accumulator is initialized correctly with the correct extent (in OSGB)
-    assert tw.accumulator.extent == [319975.0, 620025.0, 79975.0, 280025.0]
+    assert tw.accumulator.extent == [319975.0, 619975.0, 80025.0, 280025.0]
     # Now test the rest of the object which is common to all WaterCompany objects
     check_watercompany(tw)
 
@@ -433,3 +434,15 @@ def test_severn_trent_water_init():
     assert stw.accumulator.extent == [279975.0, 499975.0, 195025.0, 425025.0]
     # Now test the rest of the object which is common to all WaterCompany objects
     check_watercompany(stw)
+
+
+def test_scottish_water_init():
+    """Test the basic initialization of a ScottishWater object."""
+    sw = ScottishWater()
+    assert sw.name == "Scottish Water"
+    assert sw.client_id == ""
+    assert sw.client_secret == ""
+
+    # TODO: Once the D8 file has been uploaded to Zenodo and D8_FILE_URL / D8_FILE_HASH are
+    # updated in ScottishWater, enable the full common checks:
+    # check_watercompany(sw)

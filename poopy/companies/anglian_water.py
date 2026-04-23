@@ -20,8 +20,8 @@ class AnglianWater(WaterCompany):
     CURRENT_API_RESOURCE = "stream_service_outfall_locations_view/FeatureServer/0/query"
     HISTORICAL_API_RESOURCE = ""
     API_LIMIT = 1000  # Max num of outputs that can be requested from the API at once
-    D8_FILE_URL = "https://zenodo.org/records/14238014/files/anglian_d8.nc?download=1"
-    D8_FILE_HASH = "md5:a053da23a0305b36856f38f4a5e59e10"
+    D8_FILE_URL = "https://zenodo.org/records/19709169/files/anglian_d8.tif?download=1"
+    D8_FILE_HASH = "md5:431021a970dfa67d1dc6ad97e605d80e"
 
     def __init__(self, client_id="", client_secret=""):
         """Initialise an Anglian Water object."""

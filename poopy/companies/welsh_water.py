@@ -24,8 +24,8 @@ class WelshWater(WaterCompany):
     HISTORICAL_API_RESOURCE = ""
     API_LIMIT = 2000  # Max num of outputs that can be requested from the API at once
 
-    D8_FILE_URL = "https://zenodo.org/records/14238014/files/welsh_d8.nc?download=1"
-    D8_FILE_HASH = "md5:8c965ad0597929df3bc54bc728ed8404"
+    D8_FILE_URL = "https://zenodo.org/records/19709169/files/welsh_d8.tif?download=1"
+    D8_FILE_HASH = "md5:b17f7151618eb3511995f1a964a6ad3b"
 
     def __init__(self, client_id="", client_secret=""):
         """Initialise a Welsh Water object."""
@@ -140,12 +140,16 @@ class WelshWater(WaterCompany):
             ) <= timedelta(hours=48)
         else:
             last_48h = None
+        receiving = row["Receiving_Water"]
+        # If receiving is None parse it to a string: "Unknown"
+        if pd.isnull(receiving):
+            receiving = "Unknown"
         monitor = Monitor(
             site_name=row["asset_name"],
             permit_number=row["permit_number"],
             x_coord=row["discharge_x_location"],
             y_coord=row["discharge_y_location"],
-            receiving_watercourse=row["Receiving_Water"],
+            receiving_watercourse=receiving,
             water_company=self,
             discharge_in_last_48h=last_48h,
         )

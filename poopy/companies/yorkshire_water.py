@@ -23,8 +23,10 @@ class YorkshireWater(WaterCompany):
     HISTORICAL_API_RESOURCE = ""
     API_LIMIT = 2000  # Max num of outputs that can be requested from the API at once
 
-    D8_FILE_URL = "https://zenodo.org/records/14238014/files/yorkshire_d8.nc?download=1"
-    D8_FILE_HASH = "md5:c7acd6c730c4e7a38e9f81eb84960c66"
+    D8_FILE_URL = (
+        "https://zenodo.org/records/19709169/files/yorkshire_d8.tif?download=1"
+    )
+    D8_FILE_HASH = "md5:14faaad69fda9a3ab8c2972c14f94ce2"
 
     def __init__(self, client_id="", client_secret=""):
         """Initialise a Yorkshire Water object."""
