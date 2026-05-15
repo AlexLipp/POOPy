@@ -16,9 +16,9 @@ class SouthernWater(WaterCompany):
     There is only a current status endpoint, no historical endpoint available.
     """
 
-    API_ROOT = "https://services-eu1.arcgis.com/XxS6FebPX29TRGDJ/arcgis/rest/services/"
+    API_ROOT = "https://services-eu1.arcgis.com/6qJmARkS2dt2IjVA/arcgis/rest/services/"
     CURRENT_API_RESOURCE = (
-        "Southern_Water_Storm_Overflow_Activity/FeatureServer/0/query"
+        "SouthernWater_StormOverflowActivity_PROD_view/FeatureServer/0/query"
     )
     HISTORICAL_API_RESOURCE = ""
     API_LIMIT = 1000  # Max num of outputs that can be requested from the API at once
