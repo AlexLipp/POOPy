@@ -1,6 +1,6 @@
 """Module for Yorkshire Water API interaction."""
 
-from datetime import timedelta
+from datetime import datetime, timedelta
 
 import pandas as pd
 
@@ -51,7 +51,7 @@ class YorkshireWater(WaterCompany):
         pass
         return
 
-    def set_all_histories(self) -> None:
+    def set_all_histories(self, since: datetime | None = None) -> None:
         """Not available for Yorkshire Water API."""
         print(
             "\033[36m"
