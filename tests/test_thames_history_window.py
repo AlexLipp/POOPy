@@ -291,3 +291,66 @@ def test_error_text_survives_a_non_json_body(company, monkeypatch):
             params={"limit": ThamesWater.API_LIMIT, "offset": 0},
             since=datetime(2026, 8, 1),
         )
+
+
+def test_spurious_empty_response_is_retried(company, monkeypatch):
+    """
+    An empty body with a 200 is retried, not treated as the end of the record.
+
+    Thames rate-limits by returning an empty response rather than a 429, which
+    would otherwise abort a whole run on its very first request.
+    """
+    now = datetime(2026, 8, 28, 12, 0)
+    responses = [
+        FakeResponse(None),  # spurious empty body
+        FakeResponse(None),  # and again
+        FakeResponse(make_page(now, 10)),
+    ]
+
+    def fake_get(url, params=None, timeout=None, **kwargs):
+        return responses.pop(0)
+
+    monkeypatch.setattr("poopy.companies.thames_water.requests.get", fake_get)
+    df = company._handle_history_api_response(
+        url="https://fake/alerts",
+        params={"limit": ThamesWater.API_LIMIT, "offset": 0},
+        since=now - timedelta(hours=1),
+    )
+
+    assert len(df) == 10
+    assert responses == [], "the empty responses were not retried"
+
+
+def test_retried_empty_response_reuses_the_same_offset(company, monkeypatch):
+    """A retry re-requests the page that came back empty, rather than skipping it."""
+    now = datetime(2026, 8, 28, 12, 0)
+    offsets = []
+    responses = [FakeResponse(None), FakeResponse(make_page(now, 10))]
+
+    def fake_get(url, params=None, timeout=None, **kwargs):
+        offsets.append(params["offset"])
+        return responses.pop(0)
+
+    monkeypatch.setattr("poopy.companies.thames_water.requests.get", fake_get)
+    company._handle_history_api_response(
+        url="https://fake/alerts",
+        params={"limit": ThamesWater.API_LIMIT, "offset": 0},
+        since=now - timedelta(hours=1),
+    )
+
+    assert offsets == [0, 0], f"expected the same offset retried, got {offsets}"
+
+
+def test_persistently_empty_response_still_raises(company, monkeypatch):
+    """A response that stays empty is a real failure and is reported as one."""
+
+    def fake_get(url, params=None, timeout=None, **kwargs):
+        return FakeResponse(None)
+
+    monkeypatch.setattr("poopy.companies.thames_water.requests.get", fake_get)
+    with pytest.raises(Exception, match="returned no items"):
+        company._handle_history_api_response(
+            url="https://fake/alerts",
+            params={"limit": ThamesWater.API_LIMIT, "offset": 0},
+            since=datetime(2026, 8, 1),
+        )

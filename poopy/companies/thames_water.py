@@ -358,6 +358,9 @@ class ThamesWater(WaterCompany):
             + "\033[0m"
         )
         df = pd.DataFrame()
+        max_empty_retries = 5
+        base_delay = 5
+        empty_attempt = 0
 
         while True:
             r = self._request_with_retries(url=url, params=params)
@@ -366,6 +369,23 @@ class ThamesWater(WaterCompany):
             response = r.json()
             # If no items are returned, handle it here. Think hard on how to handle this.
             if "items" not in response:
+                # The API sometimes returns an empty body with a 200 in place of an
+                # error - notably when rate-limiting - which is indistinguishable
+                # from a genuinely empty page. Retry the same offset before giving
+                # up: a spurious empty response clears, whereas a real end-of-record
+                # keeps coming back empty and still raises below.
+                if empty_attempt < max_empty_retries - 1:
+                    delay = base_delay * (2**empty_attempt) + random.uniform(0, 30)
+                    print(
+                        f"\033[93m\tAPI returned no items for offset {params['offset']}. "
+                        f"This is often a disguised rate limit, so retrying. "
+                        f"Attempt {empty_attempt + 1}/{max_empty_retries}. "
+                        f"Waiting {delay:.1f} seconds...\033[0m"
+                    )
+                    time.sleep(delay)
+                    empty_attempt += 1
+                    continue
+
                 # Raise an exception if the response is empty.
                 nrecords = df.shape[0]
 
@@ -373,7 +393,8 @@ class ThamesWater(WaterCompany):
                 # ...Maybe if last record returned is really close to HISTORY_VALID_UNTIL then don't raise an exception.
                 # Cannot just return records because it gives false impression that all records have been fetched.
                 raise Exception(
-                    f"\n\t!ERROR! \n\tAPI returned no items for request: {r.url} \n\t! ABORTING !"
+                    f"\n\t!ERROR! \n\tAPI returned no items for request: {r.url} "
+                    f"after {max_empty_retries} attempts \n\t! ABORTING !"
                     + "\n\t"
                     + "-" * 80
                     + "\n\tThis error is *probably* caused by the API erroneously returning an empty response in place of an error..."
@@ -386,6 +407,7 @@ class ThamesWater(WaterCompany):
                     + f"\n\tNumber of records fetched before error: {nrecords}"
                 )
             else:
+                empty_attempt = 0  # A good page clears the empty-response streak
                 df_temp = pd.json_normalize(response["items"])
                 df_temp = self._transform_api_response(
                     df_temp
