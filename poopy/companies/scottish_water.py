@@ -55,7 +55,7 @@ class ScottishWater(WaterCompany):
         )
         return
 
-    def set_all_histories(self) -> None:
+    def set_all_histories(self, since: datetime | None = None) -> None:
         """Not available for Scottish Water API."""
         print(
             "\033[36m"

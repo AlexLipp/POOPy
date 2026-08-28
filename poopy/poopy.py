@@ -713,6 +713,7 @@ class WaterCompany(ABC):
     Methods:
         update: Updates the active_monitors list and the timestamp.
         set_all_histories: Sets the historical data for all active monitors and store it in the history attribute of each monitor.
+        set_all_histories_from_json: Sets the historical data for all active monitors from a saved history table, rather than from an API.
         history_to_discharge_df: Convert a water company's total discharge history to a dataframe
         get_downstream_geojson: Get a geojson of the downstream points for all current discharges in BNG coordinates.
         get_downstream_info_geojson: Get a GeoJSON feature collection of more detailed information at the downstream points for current discharges.
@@ -760,8 +761,16 @@ class WaterCompany(ABC):
         pass
 
     @abstractmethod
-    def set_all_histories(self) -> None:
-        """Set the historical data for all active monitors and store it in the history attribute of each monitor."""
+    def set_all_histories(self, since: datetime.datetime | None = None) -> None:
+        """
+        Set the historical data for all active monitors and store it in the history attribute of each monitor.
+
+        Args:
+            since: Optionally only fetch events back to this datetime, rather than
+                the whole record. Implementations whose API cannot be bounded in
+                time may ignore this argument.
+
+        """
         pass
 
     def _fetch_current_status_df(self) -> pd.DataFrame:
@@ -1649,6 +1658,77 @@ class WaterCompany(ABC):
         plt.xlabel("Easting (m)")
         plt.ylabel("Northing (m)")
         plt.title(self.name + ": " + self.timestamp.strftime("%Y-%m-%d %H:%M"))
+
+    def set_all_histories_from_json(
+        self, discharge_path: str, offline_path: str | None = None
+    ) -> None:
+        """
+        Set the historical data for all active monitors from a saved history table.
+
+        This is the inverse of `history_to_discharge_df` + `to_json`, and reads the
+        same column-oriented schema that the sewagemap history artefacts and the
+        historical-EIR pipeline both use. It makes history available for companies
+        whose API offers none, so long as a table has been assembled by other means.
+
+        Events are attached newest-first, matching the ordering POOPy assumes
+        throughout. Rows flagged `OngoingEvent` are skipped: the monitor's live
+        `current_event` already represents anything in progress, and the stop time
+        recorded for an ongoing event in a saved table is a snapshot artefact.
+
+        Locations present in the file but not among the currently active monitors
+        are reported and skipped, matching `set_all_histories`.
+
+        Args:
+            discharge_path: Path to a discharge history JSON.
+            offline_path: Optional path to a matching offline-period history JSON.
+
+        Raises:
+            ValueError: If a file does not carry the expected columns.
+
+        """
+        from poopy.history_io import history_df_to_events, read_history_json
+
+        discharge_df = read_history_json(discharge_path)
+        offline_df = read_history_json(offline_path) if offline_path else None
+
+        file_names = set(discharge_df["LocationName"].unique())
+        if offline_df is not None:
+            file_names |= set(offline_df["LocationName"].unique())
+
+        active_names = self.active_monitor_names
+        inactive_names = sorted(file_names - set(active_names))
+        if inactive_names:
+            warnings.warn(
+                f"\033[31m\n! WARNING ! The following monitors in the history file are no longer active: {inactive_names}\nStoring historical data for inactive monitors is not currently supported, so their history is skipped.\033[0m "
+            )
+
+        print("\033[36m" + "Building history for monitors from file..." + "\033[0m")
+        for name in active_names:
+            monitor = self.active_monitors[name]
+            events = history_df_to_events(
+                discharge_df[
+                    (discharge_df["LocationName"] == name)
+                    & (~discharge_df["OngoingEvent"].fillna(False).astype(bool))
+                ],
+                monitor,
+                event_types=("Discharging",),
+            )
+            if offline_df is not None:
+                events += history_df_to_events(
+                    offline_df[
+                        (offline_df["LocationName"] == name)
+                        & (~offline_df["OngoingEvent"].fillna(False).astype(bool))
+                    ],
+                    monitor,
+                    event_types=("Offline",),
+                )
+
+            # Newest first, with the live event at the head - the same convention
+            # `_alerts_df_to_events_list` produces.
+            events.sort(key=lambda event: event.start_time, reverse=True)
+            monitor._history = [monitor.current_event] + events
+
+        self._history_timestamp = datetime.datetime.now()
 
     def history_to_discharge_df(self) -> pd.DataFrame:
         """

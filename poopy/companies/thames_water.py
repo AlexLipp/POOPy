@@ -13,6 +13,19 @@ import requests
 from poopy.poopy import Discharge, Event, Monitor, NoDischarge, Offline, WaterCompany
 
 
+def _response_error_text(response: requests.Response) -> str:
+    """
+    Describe a failed response without itself raising.
+
+    The API does not always return JSON on an error, so calling `.json()` directly
+    in an error path can raise a decode error that masks the original failure.
+    """
+    try:
+        return str(response.json())
+    except ValueError:
+        return response.text[:200] if response.text else "<empty response body>"
+
+
 class ThamesWater(WaterCompany):
     """A subclass of `WaterCompany` that represents the EDM monitoring network for Thames Water."""
 
@@ -20,6 +33,10 @@ class ThamesWater(WaterCompany):
     CURRENT_API_RESOURCE = "/opendata/v2/discharge/status"
     HISTORICAL_API_RESOURCE = "/opendata/v2/discharge/alerts"
     API_LIMIT = 1000  # Max num of outputs that can be requested from the API at once
+
+    # (connect, read) timeout in seconds for every API request. Without this a hung
+    # connection blocks a run indefinitely, which is a common cause of stalled cron jobs.
+    REQUEST_TIMEOUT = (10, 60)
 
     # Set history valid until to be half past midnight on the 1st April 2022
     HISTORY_VALID_UNTIL = datetime(2022, 4, 1, 0, 30, 0)
@@ -46,10 +63,26 @@ class ThamesWater(WaterCompany):
         self._alerts_table = f"{self._name}_alerts.csv"
         self._alerts_table_update_list = f"{self._name}_alerts_update_list.dat"
 
-    def set_all_histories(self) -> None:
-        """Set the historical data for all active monitors and store it in the history attribute of each monitor."""
+    def set_all_histories(self, since: datetime | None = None) -> None:
+        """
+        Set the historical data for all active monitors and store it in the history attribute of each monitor.
+
+        Args:
+            since: Only fetch events back to this datetime. Defaults to
+                `HISTORY_VALID_UNTIL` (i.e. the whole record). Passing a recent
+                datetime dramatically reduces the number of paginated API calls,
+                because the API returns records newest-first and pagination stops
+                as soon as a record older than `since` is seen.
+
+                Note that events which *straddle* `since` cannot be reconstructed:
+                the alert stream pairs each stop alert with the preceding start
+                alert, so a stop whose start falls outside the fetched window is
+                skipped with a warning. Callers doing incremental updates should
+                therefore fetch further back than the window they intend to trust.
+
+        """
         self._history_timestamp = datetime.now()
-        df = self._fetch_all_monitors_history_df()
+        df = self._fetch_all_monitors_history_df(since=since)
         historical_names = df["LocationName"].unique().tolist()
         # Find which monitors present in historical_names are not in active_names
         active_names = self.active_monitor_names
@@ -113,8 +146,17 @@ class ThamesWater(WaterCompany):
 
         return df
 
-    def _fetch_all_monitors_history_df(self) -> pd.DataFrame:
-        """Get the historical status of all monitors by calling the API."""
+    def _fetch_all_monitors_history_df(
+        self, since: datetime | None = None
+    ) -> pd.DataFrame:
+        """
+        Get the historical status of all monitors by calling the API.
+
+        Args:
+            since: Only fetch events back to this datetime. Defaults to
+                `HISTORY_VALID_UNTIL`. See `set_all_histories`.
+
+        """
         print(
             "\033[36m"
             + "Requesting historical data for all monitors from Thames Water API..."
@@ -125,7 +167,7 @@ class ThamesWater(WaterCompany):
             "limit": self.API_LIMIT,
             "offset": 0,
         }
-        df = self._handle_history_api_response(url=url, params=params)
+        df = self._handle_history_api_response(url=url, params=params, since=since)
         df.reset_index(drop=True, inplace=True)
         return df
 
@@ -180,6 +222,81 @@ class ThamesWater(WaterCompany):
         rename_dict = {col: field_mapping[col] for col in existing_columns}
         return df.rename(columns=rename_dict)
 
+    def _request_with_retries(
+        self, url: str, params: dict, max_retries: int = 5, base_delay: int = 5
+    ) -> requests.Response:
+        """
+        GET from the API, retrying rate limits and transient server errors.
+
+        Thames routinely returns 429 "Quota has been exceeded", and a run that
+        makes many sequential requests will meet one sooner or later. Retrying
+        with exponential backoff and jitter turns that from a failed run into a
+        slow one.
+
+        Args:
+            url: The endpoint to request.
+            params: Query parameters.
+            max_retries: How many attempts before giving up.
+            base_delay: Seconds for the first backoff, doubling each attempt.
+
+        Returns:
+            The successful response.
+
+        Raises:
+            Exception: If the request still fails after `max_retries` attempts,
+                or fails with a status code that is not worth retrying.
+
+        """
+        for attempt in range(max_retries):
+            try:
+                r = requests.get(url, params=params, timeout=self.REQUEST_TIMEOUT)
+                print("\033[36m" + "\tRequesting from " + r.url + "\033[0m")
+
+                # Retry on rate-limiting (429) and on transient server errors (5xx).
+                # Both are routinely recoverable, and a single unretried failure
+                # part-way through pagination otherwise aborts the entire run.
+                if r.status_code == 429 or r.status_code >= 500:
+                    if attempt < max_retries - 1:
+                        # Calculate delay with exponential backoff and jitter
+                        delay = base_delay * (2**attempt) + random.uniform(0, 30)
+                        print(
+                            f"\033[93m\tAPI returned {r.status_code} ({_response_error_text(r)}). "
+                            f"Attempt {attempt + 1}/{max_retries}. "
+                            f"Waiting {delay:.1f} seconds before retrying...\033[0m"
+                        )
+                        time.sleep(delay)
+                        continue
+                    print(
+                        f"\033[91m\tAPI still returning {r.status_code} after {max_retries} attempts. "
+                        f"Please try again later.\033[0m"
+                    )
+                    raise Exception(
+                        f"Request failed with status code {r.status_code} after "
+                        f"{max_retries} retry attempts. Error: {_response_error_text(r)}"
+                    )
+
+                if r.status_code != 200:
+                    raise Exception(
+                        f"Request failed with status code {r.status_code}, and error message: {_response_error_text(r)}"
+                    )
+
+                return r
+
+            except requests.exceptions.RequestException as e:
+                if attempt < max_retries - 1:
+                    delay = base_delay * (2**attempt) + random.uniform(0, 30)
+                    print(
+                        f"\033[93m\tNetwork error occurred. Attempt {attempt + 1}/{max_retries}. "
+                        f"Waiting {delay:.1f} seconds before retrying...\033[0m"
+                    )
+                    time.sleep(delay)
+                    continue
+                raise Exception(
+                    f"Network error after {max_retries} attempts: {str(e)}"
+                ) from e
+
+        raise Exception(f"Request to {url} failed after {max_retries} attempts.")
+
     def _handle_current_api_response(
         self, url: str, params: str, verbose: bool = False
     ) -> pd.DataFrame:
@@ -193,28 +310,16 @@ class ThamesWater(WaterCompany):
         """
         df = pd.DataFrame()
         while True:
-            r = requests.get(
-                url,
-                params=params,
-            )
-
-            print("\033[36m" + "\tRequesting from " + r.url + "\033[0m")
-            # check response status and use only valid requests
-            if r.status_code == 200:
-                response = r.json()
-                # If no items are returned, return an empty dataframe
-                if "items" not in response:
-                    print("\033[36m" + "\tNo more records to fetch" + "\033[0m")
-                    break
-                else:
-                    df_temp = pd.json_normalize(response["items"])
-                    df_temp = self._transform_api_response(
-                        df_temp
-                    )  # Transform from v2 format for compatibility
-            else:
-                raise Exception(
-                    f"\tRequest failed with status code {r.status_code}, and error message: {r.json()}"
-                )
+            r = self._request_with_retries(url=url, params=params)
+            response = r.json()
+            # If no items are returned, we have fetched everything
+            if "items" not in response:
+                print("\033[36m" + "\tNo more records to fetch" + "\033[0m")
+                break
+            df_temp = pd.json_normalize(response["items"])
+            df_temp = self._transform_api_response(
+                df_temp
+            )  # Transform from v2 format for compatibility
             df = pd.concat([df, df_temp])
             params["offset"] += params["limit"]  # Increment offset for the next request
         df.reset_index(drop=True, inplace=True)
@@ -228,13 +333,15 @@ class ThamesWater(WaterCompany):
 
         return df
 
-    def _handle_history_api_response(self, url: str, params: str) -> pd.DataFrame:
+    def _handle_history_api_response(
+        self, url: str, params: str, since: datetime | None = None
+    ) -> pd.DataFrame:
         """
         Create and handles the response from the API.
 
         If the response is valid, it returns a dataframe of the response.
         Otherwise, it raises an exception. The function loops through the API calls until a record is returned that has a datetime
-        that exceeds the `HISTORY_VALID_UNTIL` date. This differs from the `handle_api_response` function in that it does not try
+        that exceeds the `since` date (defaulting to `HISTORY_VALID_UNTIL`). This differs from the `handle_api_response` function in that it does not try
         to fetch all records, but only those until a certain date. This allows for more elegant handling of the error whereby the
         API erroneously returns an empty dataframe in place of an error message. Note that there is one case where this function
         will behave unexpectedly: if the number of records returned is exactly an integer multiple of the API limit number of events
@@ -244,77 +351,16 @@ class ThamesWater(WaterCompany):
 
         See also the `handle_current_api_response` function.
         """
+        fetch_back_to = since if since is not None else self.HISTORY_VALID_UNTIL
         print(
             "\033[36m"
-            + f"\tRequesting historical events since {self.HISTORY_VALID_UNTIL}..."
+            + f"\tRequesting historical events since {fetch_back_to}..."
             + "\033[0m"
         )
         df = pd.DataFrame()
 
         while True:
-            # Retry logic for API requests
-            max_retries = 5
-            base_delay = 5  # Start with 5 seconds
-
-            for attempt in range(max_retries):
-                try:
-                    r = requests.get(url, params=params)
-                    print("\033[36m" + "\tRequesting from " + r.url + "\033[0m")
-
-                    # Check for quota exceeded error
-                    if r.status_code == 429:
-                        error_msg = r.json().get("error", "Unknown error")
-                        if (
-                            "quota" in error_msg.lower()
-                            or "exceeded" in error_msg.lower()
-                        ):
-                            if attempt < max_retries - 1:
-                                # Calculate delay with exponential backoff and jitter
-                                delay = base_delay * (2**attempt) + random.uniform(
-                                    0, 30
-                                )
-                                print(
-                                    f"\033[93m\tAPI quota exceeded. Attempt {attempt + 1}/{max_retries}. "
-                                    f"Waiting {delay:.1f} seconds before retrying...\033[0m"
-                                )
-                                time.sleep(delay)
-                                continue
-                            else:
-                                print(
-                                    f"\033[91m\tAPI quota exceeded after {max_retries} attempts. "
-                                    f"Please try again later.\033[0m"
-                                )
-                                raise Exception(
-                                    f"API quota exceeded after {max_retries} retry attempts. "
-                                    f"Error: {error_msg}"
-                                )
-                        else:
-                            raise Exception(
-                                f"Request failed with status code {r.status_code}, and error message: {r.json()}"
-                            )
-
-                    # Check for other HTTP errors
-                    elif r.status_code != 200:
-                        raise Exception(
-                            f"Request failed with status code {r.status_code}, and error message: {r.json()}"
-                        )
-
-                    # Success - break out of retry loop
-                    break
-
-                except requests.exceptions.RequestException as e:
-                    if attempt < max_retries - 1:
-                        delay = base_delay * (2**attempt) + random.uniform(0, 30)
-                        print(
-                            f"\033[93m\tNetwork error occurred. Attempt {attempt + 1}/{max_retries}. "
-                            f"Waiting {delay:.1f} seconds before retrying...\033[0m"
-                        )
-                        time.sleep(delay)
-                        continue
-                    else:
-                        raise Exception(
-                            f"Network error after {max_retries} attempts: {str(e)}"
-                        )
+            r = self._request_with_retries(url=url, params=params)
 
             # Process the successful response
             response = r.json()
@@ -334,7 +380,7 @@ class ThamesWater(WaterCompany):
                     + "\n\t...but it could also be caused by the API genuinely returning no records."
                     + "\n\tThis might occur if there have been *exactly* an integer multiple of the API limit number of events (e.g., 0, 1000, 2000 etc.)."
                     + "\n\tAt present there is no way to distinguish between these two cases (which is the fault of the API, not this code)."
-                    + "\n\tIf you think this is the case, try using the _handle_current_api_response function instead or modifying HISTORY_VALID_UNTIL."
+                    + "\n\tIf you think this is the case, try using the _handle_current_api_response function instead or modifying the `since` date."
                     + "\n\t"
                     + "-" * 80
                     + f"\n\tNumber of records fetched before error: {nrecords}"
@@ -346,12 +392,27 @@ class ThamesWater(WaterCompany):
                 )  # Transform from v2 format for compatibility
                 # Extract the datetime of the last record fetched and cast it to a datetime object
                 last_record_datetime = pd.to_datetime(df_temp["DateTime"].iloc[-1])
-                if last_record_datetime < self.HISTORY_VALID_UNTIL:
+                if last_record_datetime < fetch_back_to:
                     print(
                         "\033[36m"
-                        + f"\tFound a record with datetime {last_record_datetime} before `valid until' date {self.HISTORY_VALID_UNTIL}."
+                        + f"\tFound a record with datetime {last_record_datetime} before `fetch back to' date {fetch_back_to}."
                         + "\033[0m"
                     )
+
+                    # When an explicit `since` was given we only want that window,
+                    # so crossing the bound is itself the stop signal: there is no
+                    # need to keep paging back towards the start of the record.
+                    # (Records come back newest-first, and a page is a full 1000
+                    # long right up until the very end of the record, so the
+                    # short-page test below would otherwise never fire early.)
+                    if since is not None:
+                        print(
+                            "\033[36m"
+                            + "\tReached the requested window; no more records to fetch!"
+                            + "\033[0m"
+                        )
+                        df = pd.concat([df, df_temp])
+                        break
 
                     # Check the number of rows and compare to the API limit
                     if df_temp.shape[0] < self.API_LIMIT:
