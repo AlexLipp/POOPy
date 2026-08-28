@@ -1,6 +1,6 @@
 """Module for United Utilities API interaction."""
 
-from datetime import timedelta
+from datetime import datetime, timedelta
 
 import pandas as pd
 
@@ -51,7 +51,7 @@ class UnitedUtilities(WaterCompany):
         pass
         return
 
-    def set_all_histories(self) -> None:
+    def set_all_histories(self, since: datetime | None = None) -> None:
         """Not available for United Utilities API."""
         print(
             "\033[36m"

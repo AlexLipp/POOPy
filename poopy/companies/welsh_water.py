@@ -1,7 +1,7 @@
 """Module for Welsh Water API interaction."""
 
 import warnings
-from datetime import timedelta
+from datetime import datetime, timedelta
 
 import pandas as pd
 import requests
@@ -109,7 +109,7 @@ class WelshWater(WaterCompany):
         pass
         return
 
-    def set_all_histories(self) -> None:
+    def set_all_histories(self, since: datetime | None = None) -> None:
         """Not available for WW API."""
         # Print a helpful message to the user that this function is not available for this API
         print(

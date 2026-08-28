@@ -44,6 +44,30 @@ Different water companies share their [live EDM data](https://www.streamwaterdat
 
 Where historical information on CSO discharges are available (currently only provided as an API by Thames Water), `POOPy` processes this information making it very **easy to query the spill history of a particular monitor**. For instance, to calculate the total hours of sewage discharge from a given monitor over a given timeframe. Experimentally, `POOPy` also has **capabilities to 'build' histories of sewage spills** from repeated queries to the current status of a monitor, _even if (in the case of most water companies) this information is not made readily accessible_.   
 
+### Working with large histories
+
+The Thames Water alerts API is paginated newest-first, so fetching the whole record (now ~77,000 events) takes ~150 sequential requests and a single failure aborts the run. Two features make long histories practical:
+
+- **Bounded fetches.** `set_all_histories(since=...)` stops paginating once it passes the given date, so fetching a recent window costs one or two requests instead of ~150. Note that events *straddling* `since` cannot be reconstructed — the alert stream pairs each stop with the preceding start — so fetch a little further back than the window you intend to trust.
+- **Saving and reloading histories.** `poopy.history_io` reads and writes the standard column-oriented history table (the same schema as `history_to_discharge_df()`), and `WaterCompany.set_all_histories_from_json()` attaches a saved history to a company's monitors. This works for **any** water company, so histories assembled by other means (e.g. from EIR requests) can be loaded and analysed with the usual `plot_history`, `total_discharge*` and downstream-impact methods, even where no historical API exists.
+
+`merge_history_tables()` combines a long-lived history with a freshly fetched window, treating the API as authoritative inside that window and leaving older records untouched. Merging at the table level also preserves history for monitors that are no longer active, which `history_to_discharge_df()` alone would drop.
+
+```python
+from datetime import datetime, timedelta
+from poopy.companies import ThamesWater
+from poopy.history_io import read_history_json, merge_history_tables, write_history_json
+
+master = read_history_json("discharge_master.json")
+
+tw = ThamesWater()
+tw.set_all_histories(since=datetime.now() - timedelta(days=99))
+recent = tw.history_to_discharge_df()
+
+merged = merge_history_tables(master, recent, datetime.now() - timedelta(days=92))
+write_history_json(merged, "discharge_master.json")
+```
+
 ## Installation
 
 POOPy is designed to be installed using the [conda](https://docs.conda.io/en/latest/) package manager. The following instructions were designed for UNIX systems (Linux, mac) but should also work on a Windows operating system by using Anaconda prompt.  
